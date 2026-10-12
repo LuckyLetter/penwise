@@ -85,6 +85,9 @@ Three design rules keep it trustworthy:
 The panel shows a timer while it works, and closes by itself when your text needs no changes. To change the
 hotkeys, edit the Penwise block in `~/.hammerspoon/init.lua`; running `penwise setup` again keeps your changes.
 
+**Updating:** `penwise update` gets the latest version and refreshes the hotkey.
+If something isn't working, `penwise doctor` checks each part and says what to do.
+
 ## Choosing a model
 
 See the model in use and some suggestions, or switch (Penwise tests the new model before saving it):
@@ -186,7 +189,6 @@ System Settings → Keyboard → Keyboard Shortcuts → Services. You get the co
 - LaTeX, Markdown and citations are usually kept as they are, but small models occasionally touch them. Check the
   changes on technical text.
 - A few apps don't allow reading or pasting text this way. Use ⌘C in the panel and paste yourself.
-- If something isn't working, `penwise doctor` checks each part and says what to do.
 
 ## Development
 
