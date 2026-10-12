@@ -9,7 +9,7 @@ local obj = {}
 obj.__index = obj
 
 obj.name = "Penwise"
-obj.version = "0.2.0"
+obj.version = "0.3.0"
 obj.author = "LuckyLetter"
 obj.homepage = "https://github.com/LuckyLetter/penwise"
 obj.license = "Apache-2.0 - https://opensource.org/licenses/Apache-2.0"
@@ -29,6 +29,11 @@ obj.args = {}
 --- With nothing selected, a text field holding at most this many characters (a message,
 --- a comment, a form field) is checked as a whole. Set to 0 to always require a selection.
 obj.wholeFieldLimit = 2000
+
+--- Penwise.showMenu
+--- Variable
+--- Show the Penwise icon in the menu bar (when `start()` is called).
+obj.showMenu = true
 
 obj.logger = hs.logger.new("Penwise")
 
@@ -100,7 +105,88 @@ function obj:bindHotkeys(mapping)
     improve = function() self:check("improve") end,
     quick = function() self:quickFix() end,
   }, mapping)
+  self.hotkeys = mapping
   return self
+end
+
+--- Penwise:start()
+--- Method
+--- Adds the Penwise icon to the menu bar, so every action is a click away.
+function obj:start()
+  if self.showMenu and not self.menu then
+    self.menu = hs.menubar.new()
+    self.menu:setTitle("✎")
+    self.menu:setTooltip("Penwise")
+    self.menu:setMenu(function() return self:_menuItems() end)
+  end
+  return self
+end
+
+--- Penwise:stop()
+--- Method
+--- Removes the menu bar icon.
+function obj:stop()
+  if self.menu then
+    self.menu:delete()
+    self.menu = nil
+  end
+  return self
+end
+
+local MODIFIER_SYMBOLS = { ctrl = "⌃", alt = "⌥", shift = "⇧", cmd = "⌘" }
+
+-- "⌃⌥P" for { { "ctrl", "alt" }, "p" }
+local function hotkeyLabel(spec)
+  if not spec then return "" end
+  local label = ""
+  for _, name in ipairs({ "ctrl", "alt", "shift", "cmd" }) do
+    for _, mod in ipairs(spec[1]) do
+      if mod == name then label = label .. MODIFIER_SYMBOLS[name] end
+    end
+  end
+  return label .. string.upper(spec[2])
+end
+
+function obj:_menuItems()
+  local keys = self.hotkeys or {}
+  local function action(title, name, fn)
+    local label = hotkeyLabel(keys[name])
+    return { title = label ~= "" and (title .. "    " .. label) or title, fn = fn }
+  end
+  return {
+    action("Check selection", "fix", function() self:check("fix") end),
+    action("Improve selection", "improve", function() self:check("improve") end),
+    action("Quick fix selection", "quick", function() self:quickFix() end),
+    { title = "-" },
+    { title = "Your recurring fixes…", fn = function() self:showInsights() end },
+    { title = "Change model or API key…", fn = function() self:_openInTerminal("setup") end },
+    { title = "Check my setup…", fn = function() self:_openInTerminal("doctor") end },
+  }
+end
+
+--- Penwise:showInsights()
+--- Method
+--- Shows the fixes you make most often, in the Penwise panel.
+function obj:showInsights()
+  self.target = hs.window.focusedWindow()
+  local title = "Your recurring fixes"
+  self:_showPanel()
+  self:_send(hs.json.encode({ type = "note", title = title, text = "Loading…" }))
+  self.insightsTask = hs.task.new(self.bin, function(_, stdout, stderr)
+    local text = (stdout and stdout:find("%S")) and stdout or (stderr or "")
+    self:_send(hs.json.encode({ type = "note", title = title, text = text }))
+  end, concat(self.args, { "insights" }))
+  self.insightsTask:start()
+end
+
+-- Open Terminal and run a penwise command there (for the interactive ones).
+function obj:_openInTerminal(subcommand)
+  local words = { "'" .. self.bin .. "'" }
+  for _, arg in ipairs(self.args) do table.insert(words, arg) end
+  table.insert(words, subcommand)
+  hs.osascript.applescript(
+    'tell application "Terminal"\n  activate\n  do script "' .. table.concat(words, " ") .. '"\nend tell'
+  )
 end
 
 --- Penwise:check(mode)

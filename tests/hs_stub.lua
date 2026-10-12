@@ -115,4 +115,15 @@ hs = {
     usercontent = { new = function() return { setCallback = function(_, fn) SEND_MESSAGE = fn end } end },
   },
   task = { new = newTask },
+  menubar = {
+    new = function()
+      local menu = {}
+      function menu:setTitle(title) MENU_TITLE = title; return self end
+      function menu:setTooltip() return self end
+      function menu:setMenu(fn) MENU = fn; return self end
+      function menu:delete() MENU = nil end
+      return menu
+    end,
+  },
+  osascript = { applescript = function(script) log("applescript " .. script); return true end },
 }

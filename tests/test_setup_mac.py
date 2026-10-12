@@ -71,3 +71,13 @@ def test_refresh_only_touches_an_installed_hotkey(tmp_path, monkeypatch):
     assert setup_mac.refresh() is True
     assert restarted == [True]
     assert "spoon.Penwise:bindHotkeys" in (tmp_path / "init.lua").read_text()
+
+
+def test_a_block_from_0_2_gets_the_menu_bar_icon(tmp_path):
+    init_file = tmp_path / "init.lua"
+    setup_mac.write_snippet(init_file)
+    init_file.write_text(init_file.read_text().replace("spoon.Penwise:start() -- the ✎ menu bar icon\n", ""))
+    assert setup_mac.write_snippet(init_file) == "updated"
+    text = init_file.read_text()
+    assert text.count("spoon.Penwise:start()") == 1
+    assert text.index("spoon.Penwise:start()") < text.index(setup_mac.END)

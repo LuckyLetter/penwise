@@ -130,3 +130,12 @@ def test_interacting_keeps_the_panel_open(page):
     page.mouse.up()
     page.wait_for_timeout(1700)
     assert {"action": "cancel"} not in sent(page)
+
+
+def test_a_note_shows_plain_text(page):
+    send(page, {"type": "note", "title": "Your recurring fixes", "text": "3× in → on"})
+    assert page.locator("h2").text_content() == "Your recurring fixes"
+    assert page.locator("pre").inner_text() == "3× in → on"
+    page.keyboard.press("Tab")
+    page.keyboard.press("Enter")
+    assert sent(page) == [{"action": "ready"}]  # no mode switch, nothing to replace

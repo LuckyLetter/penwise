@@ -94,6 +94,7 @@
 
   .banner { margin: 0 0 12px; padding: 8px 12px; border-radius: 8px; background: var(--warn-bg); color: var(--warn-text); }
   .good { margin-top: 12px; color: var(--ins); font-weight: 500; }
+  .note-text { margin: 0; white-space: pre-wrap; font: 13px/1.55 ui-monospace, "SF Mono", Menlo, monospace; -webkit-user-select: text; user-select: text; }
   .error { color: var(--del); }
 
   h2 { margin: 18px 0 8px; font-size: 12px; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: 0.04em; }
@@ -163,7 +164,7 @@ function post(message) {
 }
 
 const state = {
-  status: "idle", // idle | loading | ready | error
+  status: "idle", // idle | loading | ready | error | note
   original: "",
   mode: "fix",
   model: "",
@@ -172,6 +173,7 @@ const state = {
   undone: new Set(),
   warnings: [],
   error: "",
+  note: { title: "", text: "" },
   explain: false,
   explaining: false,
   startedAt: 0,
@@ -309,6 +311,8 @@ function render() {
   if (state.status === "loading") {
     main.append(el("div", { class: "text" }, state.original));
     main.append(el("div", { class: "status muted pulse", id: "progress" }, progressText()));
+  } else if (state.status === "note") {
+    main.append(el("h2", {}, state.note.title), el("pre", { class: "note-text" }, state.note.text));
   } else if (state.status === "error") {
     main.append(el("div", { class: "error" }, state.error));
     main.append(el("div", { class: "status muted" }, "Run `penwise doctor` in Terminal to see what's wrong."));
@@ -330,7 +334,7 @@ function render() {
 }
 
 function setMode(mode) {
-  if (mode !== state.mode && state.status !== "idle") post({ action: "mode", mode });
+  if (mode !== state.mode && state.original && state.status !== "note") post({ action: "mode", mode });
 }
 
 function replace() {
@@ -381,6 +385,10 @@ window.penwise = {
         break;
       case "done":
         state.explaining = false;
+        break;
+      case "note":
+        stopTimers();
+        Object.assign(state, { status: "note", original: "", note: { title: event.title, text: event.text } });
         break;
       case "error":
         stopTimers();

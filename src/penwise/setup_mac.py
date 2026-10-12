@@ -24,6 +24,7 @@ spoon.Penwise:bindHotkeys({{
   improve = {{ {{ "ctrl", "alt", "shift" }}, "p" }}, -- also improve clarity and flow
   quick = {{ {{ "ctrl", "alt", "cmd" }}, "p" }},     -- fix and replace right away, no review
 }})
+spoon.Penwise:start() -- the ✎ menu bar icon
 {end}
 """
 
@@ -83,6 +84,8 @@ def write_snippet(init_file: Path) -> str:
         bin_path, args = penwise_command()
         new = re.sub(r'(?m)^spoon\.Penwise\.bin = ".*"$', f'spoon.Penwise.bin = "{bin_path}"', text)
         new = re.sub(r"(?m)^spoon\.Penwise\.args = .*$", f"spoon.Penwise.args = {_lua_args(args)}", new)
+        if "spoon.Penwise:start()" not in new:  # blocks from 0.2 had no menu bar icon
+            new = new.replace(END, "spoon.Penwise:start() -- the ✎ menu bar icon\n" + END, 1)
         status = "unchanged" if new == text else "updated"
     elif _OLD_SNIPPET.search(text):
         new = _OLD_SNIPPET.sub(lambda _: "\n" + snippet(), text, count=1)

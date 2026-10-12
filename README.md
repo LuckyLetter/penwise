@@ -82,6 +82,9 @@ Three design rules keep it trustworthy:
 | Tab                 | switch between Fix and Improve    |
 | Esc                 | close without changing anything   |
 
+Prefer clicking? The **✎ icon in the menu bar** has the same three actions, plus *Your recurring fixes*,
+*Change model or API key*, and *Check my setup*.
+
 No need to select anything in a short text box (a message, a comment, up to 2,000 characters): press the hotkey
 and Penwise takes the whole box. The panel shows a timer while it works, and closes by itself when your text
 needs no changes. To change the hotkeys, edit the Penwise block in `~/.hammerspoon/init.lua`; running

@@ -10,7 +10,7 @@ from pathlib import Path
 
 import pytest
 
-from penwise import setup_mac
+from penwise import history, setup_mac
 
 lua54 = pytest.importorskip("lupa.lua54")
 
@@ -180,3 +180,55 @@ def test_apps_without_accessibility_text_use_copy(config):
     assert spoon.log[0] == "cmd+c: user clipboard"
     assert spoon.events[0]["original"] == "Wait untill noon."
     assert g.CLIPBOARD == "user clipboard"  # put back right after copying
+
+
+def menu_items(spoon):
+    items = spoon.lua.eval("MENU()")
+    return [items[i] for i in range(1, len(items) + 1)]
+
+
+def click(spoon, title):
+    item = next(item for item in menu_items(spoon) if item["title"].startswith(title))
+    item["fn"]()
+
+
+def test_the_menu_bar_offers_every_action_with_its_hotkey(config):
+    spoon = Spoon("stream")
+    spoon.run(
+        'spoon:bindHotkeys({ fix = { { "ctrl", "alt" }, "p" }, improve = { { "ctrl", "alt", "shift" }, "p" },'
+        ' quick = { { "ctrl", "alt", "cmd" }, "p" } }); spoon:start()'
+    )
+    assert spoon.lua.globals().MENU_TITLE == "✎"
+    assert [item["title"] for item in menu_items(spoon)] == [
+        "Check selection    ⌃⌥P",
+        "Improve selection    ⌃⌥⇧P",
+        "Quick fix selection    ⌃⌥⌘P",
+        "-",
+        "Your recurring fixes…",
+        "Change model or API key…",
+        "Check my setup…",
+    ]
+    click(spoon, "Quick fix selection")
+    spoon.run_tasks()
+    assert "cmd+v: Wait until the information arrive." in spoon.log
+
+
+def test_the_menu_shows_your_recurring_fixes(config):
+    history.record([{"before": "in", "after": "on", "category": "preposition"}] * 2)
+    spoon = Spoon("stream")
+    spoon.run("spoon:start()")
+    click(spoon, "Your recurring fixes")
+    spoon.message({"action": "ready"})
+    spoon.run_tasks()
+    note = spoon.events[-1]
+    assert note["type"] == "note" and note["title"] == "Your recurring fixes"
+    assert "in → on" in note["text"]
+
+
+def test_the_menu_opens_setup_in_terminal(config):
+    spoon = Spoon("stream")
+    spoon.run("spoon:start()")
+    click(spoon, "Change model or API key")
+    (script,) = [line for line in spoon.log if line.startswith("applescript")]
+    assert 'tell application "Terminal"' in script
+    assert script.rstrip().endswith('-m penwise setup"\nend tell')

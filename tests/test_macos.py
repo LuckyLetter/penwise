@@ -75,6 +75,8 @@ def hammerspoon(server):
 
 
 def test_review_panel_and_quick_fix_in_real_hammerspoon(hammerspoon):
+    assert hs("return tostring(spoon.Penwise.menu ~= nil)") == "true"  # the ✎ menu bar icon
+
     # The review panel: the page loads, says it is ready, and shows the result.
     hs('spoon.Penwise:_showPanel(); spoon.Penwise:_review("This have a error.", "fix"); return "ok"')
     wait_for("return tostring(spoon.Penwise.ready)", lambda v: v == "true")
