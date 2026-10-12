@@ -17,12 +17,43 @@ def test_install_spoon_replaces_an_old_copy(tmp_path):
 
 def test_snippet_is_added_once(tmp_path):
     init_file = tmp_path / "init.lua"
-    assert setup_mac.needs_snippet(init_file)
-    setup_mac.add_snippet(init_file)
-    assert not setup_mac.needs_snippet(init_file)
+    init_file.write_text("-- my own config\n")
+    assert setup_mac.write_snippet(init_file) == "added"
+    assert setup_mac.write_snippet(init_file) == "unchanged"
     text = init_file.read_text()
-    assert 'hs.loadSpoon("Penwise")' in text
-    assert "spoon.Penwise:bindHotkeys" in text
+    assert text.startswith("-- my own config\n\n")
+    assert text.count('hs.loadSpoon("Penwise")') == 1
+    assert "quick = " in text
+
+
+def test_refreshing_keeps_hotkeys_you_changed(tmp_path, monkeypatch):
+    init_file = tmp_path / "init.lua"
+    setup_mac.write_snippet(init_file)
+    init_file.write_text(init_file.read_text().replace('"alt" }, "p"', '"alt" }, "e"'))
+    monkeypatch.setattr(setup_mac, "penwise_command", lambda: ("/new/bin/penwise", []))
+    assert setup_mac.write_snippet(init_file) == "updated"
+    text = init_file.read_text()
+    assert 'spoon.Penwise.bin = "/new/bin/penwise"' in text
+    assert '"alt" }, "e"' in text
+
+
+def test_the_block_from_version_0_1_is_upgraded(tmp_path):
+    init_file = tmp_path / "init.lua"
+    init_file.write_text(
+        "-- before\n\n"
+        "-- Penwise: select text anywhere, then press ⌃⌥P (fix) or ⌃⌥⇧P (improve).\n"
+        'hs.loadSpoon("Penwise")\nspoon.Penwise.bin = "/old/penwise"\nspoon.Penwise.args = {}\n'
+        "spoon.Penwise:bindHotkeys({\n"
+        '  fix = { { "ctrl", "alt" }, "p" },\n'
+        '  improve = { { "ctrl", "alt", "shift" }, "p" },\n'
+        "})\n"
+        "-- after\n"
+    )
+    assert setup_mac.write_snippet(init_file) == "updated"
+    text = init_file.read_text()
+    assert text.count('hs.loadSpoon("Penwise")') == 1
+    assert setup_mac.BEGIN in text and "quick = " in text
+    assert text.startswith("-- before\n") and text.endswith("-- after\n")
 
 
 def test_snippet_falls_back_to_python_module(monkeypatch):

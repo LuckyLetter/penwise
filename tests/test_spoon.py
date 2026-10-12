@@ -122,3 +122,27 @@ def test_errors_reach_the_panel(isolated):
     spoon.run_tasks()
     assert spoon.events[-1]["type"] == "error"
     assert "Could not reach" in spoon.events[-1]["message"]
+
+
+def test_quick_fix_replaces_right_away(config):
+    spoon = Spoon("stream")
+    spoon.run('spoon:bindHotkeys({ quick = { { "ctrl", "alt", "cmd" }, "p" } })')
+    spoon.run("HOTKEYS.quick()")
+    spoon.run_tasks()
+    assert spoon.events == []  # no review panel
+    assert "alert Penwise: fixing…" in spoon.log
+    assert "cmd+v: Wait until the information arrive." in spoon.log
+    assert "alert Penwise: 2 fixes: Spelling, Uncountable noun" in spoon.log
+    assert any("--no-explain" in line for line in spoon.log)
+    spoon.run_tasks()  # the history update
+    assert len((config / "history.jsonl").read_text().splitlines()) == 2
+    assert spoon.lua.globals().CLIPBOARD == "user clipboard"
+
+
+def test_quick_fix_says_when_there_is_nothing_to_fix(config):
+    spoon = Spoon("stream")
+    spoon.lua.globals().SELECTION = "All good here."
+    spoon.run("spoon:quickFix()")
+    spoon.run_tasks()
+    assert "alert Penwise: looks good, nothing to fix" in spoon.log
+    assert not any(line.startswith("cmd+v") for line in spoon.log)

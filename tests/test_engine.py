@@ -1,3 +1,5 @@
+import time
+
 import pytest
 
 from penwise import engine
@@ -5,12 +7,13 @@ from penwise.llm import LLMError
 
 
 def fake_chat(replies):
-    """A chat function that returns canned replies in order and records the prompts."""
+    """A chat function that answers by matching the text it is asked about, and records the prompts."""
     calls = []
 
     def chat(system, messages):
-        calls.append(messages[-1]["content"])
-        return replies.pop(0)
+        prompt = messages[-1]["content"]
+        calls.append(prompt)
+        return next(reply for text, reply in replies.items() if text in prompt)
 
     chat.calls = calls
     return chat
@@ -88,7 +91,7 @@ def test_sanity_check(edited, rejected):
 
 
 def test_check_returns_changes_and_events():
-    chat = fake_chat(["She has two datasets."])
+    chat = fake_chat({"She have": "She has two datasets."})
     events = []
     result = engine.check("She have two dataset.", chat, model="m", explain=False, on_event=events.append)
     assert result.edited == "She has two datasets."
@@ -99,7 +102,7 @@ def test_check_returns_changes_and_events():
 
 
 def test_check_keeps_a_part_the_model_answered_instead_of_editing():
-    chat = fake_chat(["Here are three bullet points:", "It works fine."])
+    chat = fake_chat({"Summarize": "Here are three bullet points:", "It work": "It works fine."})
     result = engine.check("Summarize this paper.\n\nIt work fine.", chat, explain=False)
     assert result.edited == "Summarize this paper.\n\nIt works fine."
     assert len(result.warnings) == 1
@@ -107,7 +110,9 @@ def test_check_keeps_a_part_the_model_answered_instead_of_editing():
 
 
 def test_check_adds_explanations():
-    chat = fake_chat(["She has two datasets.", '1. "She" is singular.\n2. Plural after "two".'])
+    chat = fake_chat(
+        {"Original:": '1. "She" is singular.\n2. Plural after "two".', "She have": "She has two datasets."}
+    )
     events = []
     result = engine.check("She have two dataset.", chat, explain=True, on_event=events.append)
     assert [c.reason for c in result.changes] == ['"She" is singular.', 'Plural after "two".']
@@ -128,3 +133,15 @@ def test_explanation_failures_never_lose_the_edit():
 def test_parse_reasons_maps_numbers_to_ids():
     raw = "Sure:\n1. First reason.\n2) **Second** reason.\n7. Out of range."
     assert engine.parse_reasons(raw, [10, 11]) == {10: "First reason.", 11: "Second reason."}
+
+
+def test_paragraphs_are_checked_at_the_same_time():
+    def slow_chat(system, messages):
+        time.sleep(0.3)
+        return messages[-1]["content"].split("\n", 1)[1]
+
+    text = "\n\n".join(f"Paragraph number {n} is fine." for n in range(4))
+    started = time.monotonic()
+    result = engine.check(text, slow_chat)
+    assert time.monotonic() - started < 0.9  # one after another would take 1.2s
+    assert result.edited == text

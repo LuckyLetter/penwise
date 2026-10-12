@@ -55,3 +55,26 @@ def test_rejected_key_is_explained(server):
 def test_unreachable_ollama_says_how_to_start_it():
     with pytest.raises(LLMError, match="Is Ollama running"):
         ChatClient("http://127.0.0.1:11434/v1", "m", timeout=2).chat("s", [])
+
+
+def test_reasoning_effort_is_sent_and_dropped_if_rejected(server):
+    def reply(body):
+        if "reasoning" in body:
+            raise server.Reject(400, "reasoning is not supported for this model")
+        return "Fixed."
+
+    server.reply = reply
+    assert ChatClient(server.url, "m", reasoning_effort="none").chat("s", []) == "Fixed."
+    assert server.requests[0]["reasoning"] == {"effort": "none"}
+    assert "reasoning" not in server.requests[1]
+
+
+def test_no_reasoning_setting_by_default(server):
+    ChatClient(server.url, "m").chat("s", [{"role": "user", "content": "Correct this text:\nhi"}])
+    assert "reasoning" not in server.requests[0]
+
+
+def test_out_of_credits_is_explained(server):
+    server.status = 402
+    with pytest.raises(LLMError, match="out of credits"):
+        ChatClient(server.url, "m").chat("s", [])

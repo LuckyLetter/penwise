@@ -22,17 +22,31 @@ class LLMError(Exception):
         self.status = status
 
 
+# Settings some models refuse (e.g. reasoning models that only take their default
+# temperature). When a model rejects one, the request is sent again without it.
+OPTIONAL_SETTINGS = ("temperature", "reasoning")
+
+
 class ChatClient:
-    def __init__(self, base_url: str, model: str, api_key: str = "", temperature: float = 0.2, timeout: float = 60):
+    def __init__(
+        self,
+        base_url: str,
+        model: str,
+        api_key: str = "",
+        temperature: float = 0.2,
+        timeout: float = 60,
+        reasoning_effort: str = "",
+    ):
         self.base_url = base_url.rstrip("/")
         self.model = model
         self.api_key = api_key
         self.temperature = temperature
         self.timeout = timeout
+        self.reasoning_effort = reasoning_effort
 
     @classmethod
     def from_config(cls, cfg: Config) -> ChatClient:
-        return cls(cfg.base_url, cfg.model, cfg.resolve_api_key(), cfg.temperature, cfg.timeout)
+        return cls(cfg.base_url, cfg.model, cfg.resolve_api_key(), cfg.temperature, cfg.timeout, cfg.reasoning_effort)
 
     def chat(self, system: str, messages: list[dict]) -> str:
         body = {
@@ -41,19 +55,25 @@ class ChatClient:
             "temperature": self.temperature,
             "stream": False,
         }
-        try:
-            data = self._post("/chat/completions", body)
-        except LLMError as exc:
-            # Some models (reasoning models in particular) only accept their default temperature.
-            if exc.status != 400 or "temperature" not in str(exc):
-                raise
-            del body["temperature"]
-            data = self._post("/chat/completions", body)
+        if self.reasoning_effort:
+            # OpenRouter's setting for how long a model "thinks" before answering.
+            body["reasoning"] = {"effort": self.reasoning_effort}
+        data = self._post_without_rejected(body)
         try:
             content = data["choices"][0]["message"]["content"]
         except (KeyError, IndexError, TypeError) as exc:
             raise LLMError(f"Unexpected answer from {self.base_url}: {json.dumps(data)[:300]}") from exc
         return content or ""
+
+    def _post_without_rejected(self, body: dict) -> dict:
+        while True:
+            try:
+                return self._post("/chat/completions", body)
+            except LLMError as exc:
+                rejected = [key for key in OPTIONAL_SETTINGS if key in body and key in str(exc)]
+                if exc.status != 400 or not rejected:
+                    raise
+                del body[rejected[0]]
 
     def _post(self, path: str, body: dict) -> dict:
         url = self.base_url + path
@@ -97,8 +117,10 @@ class ChatClient:
         except (ValueError, AttributeError):
             pass
         if exc.code in (401, 403):
-            hint = "Check api_key / api_key_command in the config."
+            hint = "Run `penwise setup` to save a new key."
             return f"The server refused the API key ({exc.code}). {hint} {detail}".strip()
+        if exc.code == 402:
+            return f"Your account is out of credits (402). Add credits with your provider. {detail}".strip()
         if exc.code == 404:
             hint = f" For Ollama, run: ollama pull {self.model}" if ":11434" in self.base_url else ""
             return f"Model or endpoint not found ({self.model} at {self.base_url}).{hint} {detail}".strip()

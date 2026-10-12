@@ -6,7 +6,8 @@ explanation of each change. Keep the changes you agree with, press **Return**, a
 Penwise is made for research and professional writing by non-native speakers. It aims to teach as well as correct:
 every change comes with a short note, and the fixes you make again and again show up in `penwise insights`.
 
-It is built to work with a small local model (such as a 1B model on an M1 Mac) or any cloud model you have an API key for.
+It works with a cloud model you have an API key for, or a small local model (such as a 1B model on an M1 Mac).
+Setup is one command that asks a few questions and does the rest.
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="docs/panel-dark.png">
@@ -17,18 +18,19 @@ It is built to work with a small local model (such as a 1B model on an M1 Mac) o
 
 ```
  Any Mac app (text selected)
-        │  ⌃⌥P fix  ·  ⌃⌥⇧P improve
+        │  ⌃⌥P fix  ·  ⌃⌥⇧P improve  ·  ⌃⌥⌘P quick fix
         ▼
  Hammerspoon Spoon (Lua)          reads the selection, shows the review panel, pastes the result
-        │  stdin → JSON lines
+        │  text as an argument → JSON lines
         ▼
  penwise (Python)
-   engine.py    split into paragraphs → ask the model → clean reply → sanity-check → diff
+   engine.py    split into paragraphs → ask the model (in parallel) → clean → sanity-check → diff
    prompts.py   short prompts with examples, tuned on 1B models
    llm.py       one client for every model: the OpenAI-compatible chat API
    diff.py      word-level diff, computed in code, not by the model
    lessons.py   a label and a fixed teaching note for each change
    history.py   a local log of accepted fixes → "you've made this fix 3× before"
+   wizard.py    `penwise setup`: model, key (Keychain), hotkey, all in one go
         │  HTTP
         ▼
  Ollama / LM Studio / llama.cpp / MLX on your Mac   — or —   OpenAI / OpenRouter / Groq / …
@@ -47,51 +49,60 @@ Three design rules keep it trustworthy:
 
 ## Quick start (macOS)
 
-1. **Get a local model.** Install [Ollama](https://ollama.com), then:
-
-   ```sh
-   ollama pull gemma3:1b
-   ```
-
-2. **Install Penwise** with [uv](https://docs.astral.sh/uv/) (`brew install uv`) or pipx:
+1. **Install Penwise** with [uv](https://docs.astral.sh/uv/) (`brew install uv`):
 
    ```sh
    uv tool install git+https://github.com/LuckyLetter/penwise
-   penwise init      # writes ~/.config/penwise/config.toml
-   penwise doctor    # checks the setup and runs a test sentence
+   uv tool update-shell    # then open a new Terminal window
    ```
 
-3. **Add the hotkey** with [Hammerspoon](https://www.hammerspoon.org), a free, open-source macOS automation app:
+2. **Run the guided setup:**
 
    ```sh
-   brew install --cask hammerspoon
-   penwise setup-mac
+   penwise setup
    ```
 
-   Then open Hammerspoon, choose **Reload Config** from its menu bar icon, and allow it under
-   **System Settings → Privacy & Security → Accessibility**.
+   It asks where the model should run, saves your API key in the macOS Keychain, lets you pick a model from a
+   short list, tests it, and installs the hotkey (it can install [Hammerspoon](https://www.hammerspoon.org) for you
+   with Homebrew). Press Return to take the suggested answer at every step.
 
-4. **Use it.** Select text anywhere and press **⌃⌥P** to fix it, or **⌃⌥⇧P** to also improve clarity and flow.
+3. **Use it.** Select text in any app and press:
 
-| In the panel   |                                   |
-| -------------- | --------------------------------- |
-| click / 1–9    | undo or redo a single change      |
-| Return         | replace your selection            |
-| ⌘C             | copy the result instead           |
-| Tab            | switch between Fix and Improve    |
-| Esc            | close without changing anything   |
+   | Hotkey | What it does |
+   | ------ | ------------ |
+   | **⌃⌥P**  (Control+Option+P)       | review the fixes, each with a short note, then press Return to replace |
+   | **⌃⌥⇧P** (Control+Option+Shift+P) | the same, and also improve clarity and flow |
+   | **⌃⌥⌘P** (Control+Option+Command+P) | quick fix: replace right away, with a one-line summary |
+
+| In the review panel |                                   |
+| ------------------- | --------------------------------- |
+| click / 1–9         | undo or redo a single change      |
+| Return              | replace your selection            |
+| ⌘C                  | copy the result instead           |
+| Tab                 | switch between Fix and Improve    |
+| Esc                 | close without changing anything   |
+
+The panel shows a timer while it works, and closes by itself when your text needs no changes. To change the
+hotkeys, edit the Penwise block in `~/.hammerspoon/init.lua`; running `penwise setup` again keeps your changes.
 
 ## Choosing a model
 
-Every model is reached the same way, through an OpenAI-compatible chat API, so switching is a matter of changing
-`base_url` and `model` in `~/.config/penwise/config.toml`:
+See the model in use and some suggestions, or switch (Penwise tests the new model before saving it):
+
+```sh
+penwise model
+penwise model mistralai/mistral-small-2603
+```
+
+Every model is reached the same way, through an OpenAI-compatible chat API, so any of these work. `penwise setup`
+fills in the right `base_url` for OpenRouter and Ollama.
 
 | Where                 | `base_url`                      | `model` (example)                         |
 | --------------------- | ------------------------------- | ----------------------------------------- |
 | Ollama (default)      | `http://localhost:11434/v1`     | `gemma3:1b`, `llama3.2:1b`                |
 | LM Studio             | `http://localhost:1234/v1`      | the model id shown in LM Studio           |
 | MLX (`mlx_lm.server`) | `http://localhost:8080/v1`      | `mlx-community/Llama-3.2-1B-Instruct-4bit` |
-| OpenRouter (one key, many cloud models) | `https://openrouter.ai/api/v1` | an id from openrouter.ai/models, e.g. `openai/gpt-6-luna` |
+| OpenRouter (one key, many cloud models) | `https://openrouter.ai/api/v1` | an id from openrouter.ai/models, e.g. `mistralai/mistral-small-2603` |
 | Another cloud service | the service's OpenAI-compatible URL, e.g. `https://api.openai.com/v1` | a model from that service |
 
 **About 1B models:** they catch common errors well (verb agreement, articles, prepositions, spelling, *then/than*).
@@ -99,24 +110,19 @@ They miss some errors and now and then over-edit, which is why every change can 
 on `gemma3:1b` and `llama3.2:1b`; `gemma3:1b` caught slightly more errors. A larger local model or a cloud model
 gives better corrections, and its one-line explanations are worth turning on (`explain = true`).
 
-**API keys** for cloud services: keep them in the macOS Keychain rather than in a file.
+**Speed:** many cloud models "think" before answering, which adds seconds to every check. For the models it
+suggests, Penwise turns that down automatically (`reasoning_effort`). For a hotkey tool, a fast model that doesn't
+think by default, like `mistralai/mistral-small-2603`, feels best.
 
-```sh
-security add-generic-password -a "$USER" -s penwise -w      # paste your key when asked
-```
-
-```toml
-# ~/.config/penwise/config.toml
-base_url = "https://api.openai.com/v1"
-model = "a-model-name-from-your-provider"
-api_key_command = "security find-generic-password -s penwise -w"
-```
-
-`api_key_env = "SOME_VAR"` and `api_key = "..."` also work. Local servers need no key.
+**API keys:** `penwise setup` stores the key in the macOS Keychain and points the config at it with
+`api_key_command = "security find-generic-password -s penwise -w"`. `api_key_env = "SOME_VAR"` and
+`api_key = "..."` also work. Local servers need no key.
 
 ## Configuration
 
-`penwise init` writes a commented config file. All settings:
+`penwise config` shows your settings, and `penwise config set <name> <value>` changes one (for example
+`penwise config set explain true`). The file is `~/.config/penwise/config.toml`; `penwise init` writes a version
+with every setting explained. All settings:
 
 | Setting           | Default                     | Meaning                                                        |
 | ----------------- | --------------------------- | -------------------------------------------------------------- |
@@ -130,6 +136,7 @@ api_key_command = "security find-generic-password -s penwise -w"
 | `history`         | `true`                      | keep a local log of accepted changes for `penwise insights`    |
 | `temperature`     | `0.2`                       | lower is more predictable                                      |
 | `timeout`         | `60`                        | seconds to wait for the model                                  |
+| `reasoning_effort`| –                           | how long a cloud model "thinks" first (`none`, `low`, …); lower is faster |
 
 ## Learning from your changes
 
@@ -153,8 +160,8 @@ The review panel also tells you when you've made the same fix before. History is
 ## Privacy
 
 - Your text is sent **only** to the `base_url` you configure. With a local model, nothing leaves your Mac.
-- Penwise stores your config, plus (unless turned off) the accepted changes: the changed words and up to a few
-  words on each side, never whole texts.
+- Penwise stores your config, your API key in the Keychain, and (unless turned off) the accepted changes: the
+  changed words and up to a few words on each side, never whole texts.
 - No telemetry, no accounts, no network calls besides the model API.
 - Hammerspoon needs Accessibility permission to copy your selection and paste the result. Penwise puts your
   clipboard back afterwards.
@@ -179,6 +186,7 @@ System Settings → Keyboard → Keyboard Shortcuts → Services. You get the co
 - LaTeX, Markdown and citations are usually kept as they are, but small models occasionally touch them. Check the
   changes on technical text.
 - A few apps don't allow reading or pasting text this way. Use ⌘C in the panel and paste yourself.
+- If something isn't working, `penwise doctor` checks each part and says what to do.
 
 ## Development
 

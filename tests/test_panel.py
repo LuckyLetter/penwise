@@ -97,3 +97,36 @@ def test_text_is_never_interpreted_as_html(page):
     send(page, check_result("<img src=x onerror=alert(1)> is here", "<img src=x onerror=alert(1)> is there"))
     assert page.locator("main img").count() == 0
     assert "<img src=x" in page.locator("main").inner_text()
+
+
+def test_a_timer_runs_while_checking(page):
+    send(page, {"type": "begin", "original": "Some text.", "mode": "fix"})
+    assert page.locator("#progress").inner_text() == "Checking…"
+    page.wait_for_timeout(1300)
+    assert page.locator("#progress").inner_text() == "Checking… 1s"
+
+
+def test_the_panel_shows_how_long_the_check_took(page):
+    send(page, {"type": "begin", "original": "a eror", "mode": "fix"})
+    send(page, {"type": "start", "model": "mistralai/mistral-small-2603", "explain": False})
+    result = check_result("a eror", "an error")
+    result["elapsed_ms"] = 1234
+    send(page, result)
+    assert page.locator("#model").inner_text() == "mistral-small-2603 · 1.2s"
+
+
+def test_text_that_needs_no_changes_closes_by_itself(page):
+    send(page, {"type": "begin", "original": "All good.", "mode": "fix"})
+    send(page, check_result("All good.", "All good."))
+    assert "Looks good" in page.locator("main").inner_text()
+    page.wait_for_timeout(1700)
+    assert sent(page)[-1] == {"action": "cancel"}
+
+
+def test_interacting_keeps_the_panel_open(page):
+    send(page, {"type": "begin", "original": "All good.", "mode": "fix"})
+    send(page, check_result("All good.", "All good."))
+    page.mouse.down()
+    page.mouse.up()
+    page.wait_for_timeout(1700)
+    assert {"action": "cancel"} not in sent(page)

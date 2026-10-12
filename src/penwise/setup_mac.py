@@ -1,24 +1,34 @@
-"""Install the Hammerspoon Spoon that gives Penwise its hotkey and review panel."""
+"""Install the Hammerspoon Spoon that gives Penwise its hotkeys and review panel."""
 
 from __future__ import annotations
 
+import re
 import shutil
+import subprocess
 import sys
+import time
 from pathlib import Path
 
 SPOON_NAME = "Penwise.spoon"
-LOAD_LINE = 'hs.loadSpoon("Penwise")'
+BEGIN = "-- >>> Penwise"
+END = "-- <<< Penwise"
+APP_PATHS = (Path("/Applications/Hammerspoon.app"), Path.home() / "Applications" / "Hammerspoon.app")
+ACCESSIBILITY_SETTINGS = "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility"
 
-SNIPPET = """
--- Penwise: select text anywhere, then press ⌃⌥P (fix) or ⌃⌥⇧P (improve).
+SNIPPET = """{begin} (added by `penwise setup`; you can change the hotkeys below)
 hs.loadSpoon("Penwise")
 spoon.Penwise.bin = "{bin}"
 spoon.Penwise.args = {args}
 spoon.Penwise:bindHotkeys({{
-  fix = {{ {{ "ctrl", "alt" }}, "p" }},
-  improve = {{ {{ "ctrl", "alt", "shift" }}, "p" }},
+  fix = {{ {{ "ctrl", "alt" }}, "p" }},              -- review fixes for the selected text
+  improve = {{ {{ "ctrl", "alt", "shift" }}, "p" }}, -- also improve clarity and flow
+  quick = {{ {{ "ctrl", "alt", "cmd" }}, "p" }},     -- fix and replace right away, no review
 }})
+{end}
 """
+
+# The block written by Penwise 0.1, before it had markers.
+_OLD_SNIPPET = re.compile(r"\n?-- Penwise: select text anywhere.*?\n\}\)\n", re.DOTALL)
 
 
 def spoon_source() -> Path:
@@ -29,6 +39,10 @@ def hammerspoon_dir() -> Path:
     return Path.home() / ".hammerspoon"
 
 
+def hammerspoon_installed() -> bool:
+    return any(path.exists() for path in APP_PATHS)
+
+
 def penwise_command() -> tuple[str, list[str]]:
     """How Hammerspoon should start Penwise: (executable, leading arguments)."""
     found = shutil.which("penwise")
@@ -37,10 +51,13 @@ def penwise_command() -> tuple[str, list[str]]:
     return sys.executable, ["-m", "penwise"]
 
 
+def _lua_args(args: list[str]) -> str:
+    return "{ " + ", ".join(f'"{a}"' for a in args) + " }" if args else "{}"
+
+
 def snippet() -> str:
     bin_path, args = penwise_command()
-    lua_args = "{ " + ", ".join(f'"{a}"' for a in args) + " }" if args else "{}"
-    return SNIPPET.format(bin=bin_path, args=lua_args)
+    return SNIPPET.format(begin=BEGIN, end=END, bin=bin_path, args=_lua_args(args))
 
 
 def install_spoon(target_dir: Path | None = None) -> Path:
@@ -51,11 +68,36 @@ def install_spoon(target_dir: Path | None = None) -> Path:
     return target
 
 
-def needs_snippet(init_file: Path) -> bool:
-    return not (init_file.exists() and LOAD_LINE in init_file.read_text(encoding="utf-8"))
+def write_snippet(init_file: Path) -> str:
+    """Add or refresh the Penwise block in init.lua. Returns "added", "updated" or "unchanged".
+
+    Inside an existing block only the path to `penwise` is refreshed, so hotkeys
+    you changed there are kept.
+    """
+    text = init_file.read_text(encoding="utf-8") if init_file.exists() else ""
+    if BEGIN in text:
+        bin_path, args = penwise_command()
+        new = re.sub(r'(?m)^spoon\.Penwise\.bin = ".*"$', f'spoon.Penwise.bin = "{bin_path}"', text)
+        new = re.sub(r"(?m)^spoon\.Penwise\.args = .*$", f"spoon.Penwise.args = {_lua_args(args)}", new)
+        status = "unchanged" if new == text else "updated"
+    elif _OLD_SNIPPET.search(text):
+        new = _OLD_SNIPPET.sub(lambda _: "\n" + snippet(), text, count=1)
+        status = "updated"
+    else:
+        new = text + ("\n" if text and not text.endswith("\n") else "") + ("\n" if text else "") + snippet()
+        status = "added"
+    if new != text:
+        init_file.parent.mkdir(parents=True, exist_ok=True)
+        init_file.write_text(new, encoding="utf-8")
+    return status
 
 
-def add_snippet(init_file: Path) -> None:
-    init_file.parent.mkdir(parents=True, exist_ok=True)
-    with init_file.open("a", encoding="utf-8") as f:
-        f.write(snippet())
+def restart_hammerspoon() -> None:
+    """Quit and reopen Hammerspoon so it loads the new config."""
+    subprocess.run(["osascript", "-e", 'quit app "Hammerspoon"'], capture_output=True)
+    time.sleep(1)
+    subprocess.run(["open", "-a", "Hammerspoon"], capture_output=True)
+
+
+def open_accessibility_settings() -> None:
+    subprocess.run(["open", ACCESSIBILITY_SETTINGS], capture_output=True)

@@ -62,6 +62,19 @@ local function takeLines(buffer)
   return lines, buffer
 end
 
+-- "3 fixes: Articles, Word form"
+local function summarize(changes)
+  local labels, seen = {}, {}
+  for _, change in ipairs(changes) do
+    if change.label and not seen[change.label] and #labels < 3 then
+      seen[change.label] = true
+      table.insert(labels, change.label)
+    end
+  end
+  local count = #changes == 1 and "1 fix" or (#changes .. " fixes")
+  return #labels > 0 and (count .. ": " .. table.concat(labels, ", ")) or count
+end
+
 function obj:init()
   self.html = readFile(spoonPath .. "panel.html")
   self.run = 0
@@ -71,11 +84,15 @@ end
 
 --- Penwise:bindHotkeys(mapping)
 --- Method
---- Binds hotkeys. Keys of `mapping`: `fix` (only errors) and `improve` (also clarity and flow).
+--- Binds hotkeys. Keys of `mapping`:
+---  * `fix`: review fixes for the selected text
+---  * `improve`: also improve clarity and flow
+---  * `quick`: fix the selected text and replace it right away, without the review panel
 function obj:bindHotkeys(mapping)
   hs.spoons.bindHotkeysToSpec({
     fix = function() self:check("fix") end,
     improve = function() self:check("improve") end,
+    quick = function() self:quickFix() end,
   }, mapping)
   return self
 end
@@ -85,25 +102,52 @@ end
 --- Reads the selected text in the frontmost app and opens the review panel.
 function obj:check(mode)
   if self.webview and self.webview:isVisible() then
-    self:_start(self.text, mode)
+    self:_review(self.text, mode)
     return
   end
+  self:_withSelection(function(text)
+    self:_showPanel()
+    self:_review(text, mode)
+  end)
+end
+
+--- Penwise:quickFix()
+--- Method
+--- Fixes the selected text and replaces it right away, then says briefly what changed.
+function obj:quickFix()
+  self:_withSelection(function(text)
+    self.text = text
+    local notice = hs.alert.show("Penwise: fixing…", 60)
+    self:_run(text, "fix", { "--no-explain" }, function(event)
+      if event.type ~= "result" and event.type ~= "error" then return end
+      hs.alert.closeSpecific(notice)
+      if event.type == "error" then
+        hs.alert.show("Penwise: " .. event.message, 6)
+      elseif #event.changes == 0 then
+        hs.alert.show("Penwise: looks good, nothing to fix")
+      else
+        self:_replace(event.edited, event.changes)
+        hs.alert.show("Penwise: " .. summarize(event.changes), 3)
+      end
+    end)
+  end)
+end
+
+-- Read the selection, check it is usable, and pass it on.
+function obj:_withSelection(callback)
   if not hs.fs.attributes(self.bin) then
-    hs.alert.show("Penwise: command not found at " .. self.bin .. ". Run `penwise setup-mac` again.")
+    hs.alert.show("Penwise: command not found at " .. self.bin .. ". Run `penwise setup` again.")
     return
   end
   self.target = hs.window.focusedWindow()
   self:_readSelection(function(text)
     if not text or not text:find("%S") then
       hs.alert.show("Penwise: select some text first")
-      return
-    end
-    if #text > 100000 then
+    elseif #text > 100000 then
       hs.alert.show("Penwise: the selection is too long (over 100,000 characters)")
-      return
+    else
+      callback(text)
     end
-    self:_showPanel()
-    self:_start(text, mode)
   end)
 end
 
@@ -158,13 +202,18 @@ function obj:_showPanel()
   if window then window:focus() end
 end
 
--- Run `penwise check` and stream its events into the panel.
-function obj:_start(text, mode)
+-- Check the text and stream the results into the review panel.
+function obj:_review(text, mode)
+  self.text, self.mode = text, mode
+  self:_send(hs.json.encode({ type = "begin", original = text, mode = mode }))
+  self:_run(text, mode, {}, function(_, line) self:_send(line) end)
+end
+
+-- Run `penwise check` and call onEvent(event, line) for each JSON event it prints.
+function obj:_run(text, mode, extraArgs, onEvent)
   self.run = self.run + 1
   local run = self.run
   if self.task and self.task:isRunning() then self.task:terminate() end
-  self.text, self.mode = text, mode
-  self:_send(hs.json.encode({ type = "begin", original = text, mode = mode }))
 
   local buffer, seen, finished = "", {}, false
   local function forward(lines)
@@ -173,14 +222,15 @@ function obj:_start(text, mode)
       if not seen[line] and ok and type(event) == "table" then
         seen[line] = true
         finished = finished or event.type == "done" or event.type == "error"
-        self:_send(line)
+        onEvent(event, line)
       end
     end
   end
 
   -- The text goes in as an argument, not on stdin: hs.task writes stdin later, from the
   -- event loop, so input given to a streaming task can be lost when stdin is closed.
-  local args = concat(self.args, { "check", "--format", "jsonl", "--mode", mode, "--", text })
+  local args = concat(self.args, concat({ "check", "--format", "jsonl", "--mode", mode }, extraArgs))
+  args = concat(args, { "--", text })
   self.task = hs.task.new(self.bin, function(code, stdout, stderr)
     if run ~= self.run then return end
     if not finished and stdout and stdout ~= "" then
@@ -191,7 +241,8 @@ function obj:_start(text, mode)
     if not finished then
       local message = (stderr or ""):gsub("^penwise: ", ""):gsub("%s+$", "")
       if message == "" then message = "penwise stopped unexpectedly (exit code " .. code .. ")" end
-      self:_send(hs.json.encode({ type = "error", message = message }))
+      local event = { type = "error", message = message }
+      onEvent(event, hs.json.encode(event))
     end
   end, function(_, stdout)
     if run ~= self.run then return false end
@@ -224,7 +275,7 @@ function obj:_onMessage(body)
     self:_close(true)
     hs.alert.show("Copied")
   elseif body.action == "mode" then
-    self:_start(self.text, body.mode)
+    self:_review(self.text, body.mode)
   elseif body.action == "cancel" then
     self:_close(true)
   end

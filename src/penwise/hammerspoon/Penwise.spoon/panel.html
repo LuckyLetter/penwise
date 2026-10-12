@@ -174,7 +174,26 @@ const state = {
   error: "",
   explain: false,
   explaining: false,
+  startedAt: 0,
+  elapsedMs: 0,
 };
+
+// While checking, a ticking timer shows that something is happening. When the
+// text needs no changes, the panel closes by itself unless you interact with it.
+const AUTO_CLOSE_MS = 1500;
+let ticker = null;
+let autoClose = null;
+
+function stopTimers() {
+  clearInterval(ticker);
+  clearTimeout(autoClose);
+  ticker = autoClose = null;
+}
+
+function progressText() {
+  const seconds = Math.floor((Date.now() - state.startedAt) / 1000);
+  return (state.mode === "fix" ? "Checking…" : "Improving…") + (seconds >= 1 ? ` ${seconds}s` : "");
+}
 
 function el(tag, attrs, ...children) {
   const node = document.createElement(tag);
@@ -279,7 +298,9 @@ function render() {
   document.querySelectorAll(".modes button").forEach((button) => {
     button.setAttribute("aria-pressed", String(button.dataset.mode === state.mode));
   });
-  document.getElementById("model").textContent = state.model;
+  const took = state.status === "ready" && state.elapsedMs ? ` · ${(state.elapsedMs / 1000).toFixed(1)}s` : "";
+  // "mistralai/mistral-small-2603" → "mistral-small-2603"
+  document.getElementById("model").textContent = state.model.split("/").pop() + took;
 
   const main = document.getElementById("main");
   main.className = state.status;
@@ -287,10 +308,10 @@ function render() {
 
   if (state.status === "loading") {
     main.append(el("div", { class: "text" }, state.original));
-    main.append(el("div", { class: "status muted pulse" }, state.mode === "fix" ? "Checking…" : "Improving…"));
+    main.append(el("div", { class: "status muted pulse", id: "progress" }, progressText()));
   } else if (state.status === "error") {
     main.append(el("div", { class: "error" }, state.error));
-    main.append(el("div", { class: "status muted" }, "Run `penwise doctor` in Terminal to check your setup."));
+    main.append(el("div", { class: "status muted" }, "Run `penwise doctor` in Terminal to see what's wrong."));
   } else if (state.status === "ready") {
     for (const warning of state.warnings) main.append(el("div", { class: "banner" }, warning));
     main.append(renderText());
@@ -298,7 +319,7 @@ function render() {
       const title = `${state.changes.length} change${state.changes.length === 1 ? "" : "s"}` + (state.explaining ? " · explaining…" : "");
       main.append(el("h2", {}, title), renderChanges());
     } else if (!state.warnings.length) {
-      main.append(el("div", { class: "good" }, "Looks good. No changes suggested."));
+      main.append(el("div", { class: "good" }, "Looks good. No changes needed."));
     }
   }
 
@@ -329,20 +350,29 @@ window.penwise = {
   receive(event) {
     switch (event.type) {
       case "begin":
+        stopTimers();
         Object.assign(state, {
-          status: "loading", original: event.original, mode: event.mode,
+          status: "loading", original: event.original, mode: event.mode, startedAt: Date.now(), elapsedMs: 0,
           segments: [], changes: [], undone: new Set(), warnings: [], error: "", explaining: false,
         });
+        ticker = setInterval(() => {
+          const progress = document.getElementById("progress");
+          if (progress) progress.textContent = progressText();
+        }, 250);
         break;
       case "start":
         state.model = event.model;
         state.explain = Boolean(event.explain);
         break;
       case "result":
+        stopTimers();
         Object.assign(state, {
           status: "ready", segments: event.segments, changes: event.changes, warnings: event.warnings,
-          explaining: state.explain && event.changes.length > 0,
+          explaining: state.explain && event.changes.length > 0, elapsedMs: event.elapsed_ms,
         });
+        if (!event.changes.length && !event.warnings.length) {
+          autoClose = setTimeout(() => post({ action: "cancel" }), AUTO_CLOSE_MS);
+        }
         break;
       case "explanations":
         for (const change of state.changes) {
@@ -353,6 +383,7 @@ window.penwise = {
         state.explaining = false;
         break;
       case "error":
+        stopTimers();
         Object.assign(state, { status: "error", error: event.message });
         break;
     }
@@ -367,7 +398,11 @@ document.getElementById("cancel").addEventListener("click", () => post({ action:
 document.getElementById("copy").addEventListener("click", copy);
 document.getElementById("replace").addEventListener("click", replace);
 
+// Any interaction keeps a "looks good" panel open.
+document.addEventListener("mousedown", () => clearTimeout(autoClose));
+
 document.addEventListener("keydown", (event) => {
+  clearTimeout(autoClose);
   const selection = String(window.getSelection());
   if (event.key === "Enter") {
     event.preventDefault();

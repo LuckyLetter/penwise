@@ -29,7 +29,9 @@ def pretty(result: Result, color: bool) -> str:
             continue
         change = by_id[seg]
         if color:
-            inline.append(paint(change.before, RED, STRIKE) + paint(change.after, GREEN))
+            # Not every terminal shows strikethrough, so a replacement also gets an arrow.
+            arrow = paint("→", DIM) if change.before.strip() and change.after.strip() else ""
+            inline.append(paint(change.before, RED, STRIKE) + arrow + paint(change.after, GREEN))
         else:
             inline.append(
                 (f"[-{change.before}-]" if change.before else "") + (f"{{+{change.after}+}}" if change.after else "")

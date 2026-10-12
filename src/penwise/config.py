@@ -7,7 +7,9 @@ OpenAI-compatible chat API at `base_url`. Switching models means changing
 
 from __future__ import annotations
 
+import json
 import os
+import re
 import subprocess
 import sys
 from dataclasses import dataclass, field, fields
@@ -66,6 +68,10 @@ history = true
 # Lower is more predictable. Corrections work best between 0 and 0.3.
 temperature = 0.2
 
+# How long a cloud model "thinks" before answering (OpenRouter). Lower is faster.
+# Leave unset for the model's default; "none" or "low" where the model allows it.
+# reasoning_effort = "low"
+
 # Seconds to wait for the model before giving up.
 timeout = 60
 """
@@ -87,6 +93,7 @@ class Config:
     history: bool = True
     temperature: float = 0.2
     timeout: float = 60
+    reasoning_effort: str = ""
     max_chunk_chars: int = 1200
     path: Path | None = field(default=None, compare=False)
 
@@ -129,18 +136,24 @@ def config_path() -> Path:
     return Path(base) / "penwise" / "config.toml"
 
 
+SETTINGS = tuple(f.name for f in fields(Config) if f.name != "path")
+
+
 def load(path: Path | None = None) -> Config:
     path = path or config_path()
-    cfg = Config(path=path)
     if not path.exists():
-        return cfg
+        return Config(path=path)
+    return _parse(path.read_text(encoding="utf-8"), path)
+
+
+def _parse(text: str, path: Path) -> Config:
     try:
-        data = tomllib.loads(path.read_text(encoding="utf-8"))
+        data = tomllib.loads(text)
     except tomllib.TOMLDecodeError as exc:
         raise ConfigError(f"Could not read {path}: {exc}") from exc
 
-    known = {f.name: f for f in fields(Config) if f.name != "path"}
-    unknown = sorted(set(data) - set(known))
+    cfg = Config(path=path)
+    unknown = sorted(set(data) - set(SETTINGS))
     if unknown:
         raise ConfigError(f"Unknown setting(s) in {path}: {', '.join(unknown)}")
     for name, value in data.items():
@@ -151,6 +164,82 @@ def load(path: Path | None = None) -> Config:
     if cfg.mode not in MODES:
         raise ConfigError(f"mode should be one of {', '.join(MODES)} in {path}")
     return cfg
+
+
+def parse_value(name: str, raw: str) -> bool | float | int | str:
+    """Turn a value typed on the command line into the setting's type."""
+    if name not in SETTINGS:
+        raise ConfigError(f"Unknown setting: {name}. Settings: {', '.join(SETTINGS)}")
+    default = getattr(Config(), name)
+    if isinstance(default, bool):
+        words = {
+            "true": True,
+            "yes": True,
+            "on": True,
+            "1": True,
+            "false": False,
+            "no": False,
+            "off": False,
+            "0": False,
+        }
+        if raw.lower() not in words:
+            raise ConfigError(f"{name} should be true or false")
+        return words[raw.lower()]
+    if isinstance(default, (int, float)):
+        try:
+            number = float(raw)
+        except ValueError as exc:
+            raise ConfigError(f"{name} should be a number") from exc
+        return int(number) if number.is_integer() and isinstance(default, int) else number
+    return raw
+
+
+def set_values(updates: dict, path: Path | None = None) -> Path:
+    """Change settings in the config file, keeping its comments. A value of None removes the setting."""
+    path = path or config_path()
+    lines = path.read_text(encoding="utf-8").splitlines() if path.exists() else []
+    for name, value in updates.items():
+        if name not in SETTINGS:
+            raise ConfigError(f"Unknown setting: {name}")
+        pattern = re.compile(rf"^\s*{re.escape(name)}\s*=")
+        index = next((i for i, line in enumerate(lines) if pattern.match(line)), None)
+        if value is None:
+            if index is not None:
+                del lines[index]
+        elif index is None:
+            lines.append(f"{name} = {_toml_value(value)}")
+        else:
+            lines[index] = f"{name} = {_toml_value(value)}"
+    text = "\n".join(lines) + "\n"
+    _parse(text, path)  # never write a file that would not load
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(text, encoding="utf-8")
+    return path
+
+
+def write_config(values: dict, path: Path | None = None) -> Path:
+    """Write a fresh, short config file with these values (used by `penwise setup`)."""
+    path = path or config_path()
+    header = (
+        "# Penwise settings, written by `penwise setup`.\n"
+        "# Change them with `penwise model` and `penwise config set`, or edit this file.\n"
+        "# All settings: https://github.com/LuckyLetter/penwise#configuration\n\n"
+    )
+    body = "".join(f"{name} = {_toml_value(value)}\n" for name, value in values.items() if value is not None)
+    _parse(body, path)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(header + body, encoding="utf-8")
+    if "api_key" in values:
+        path.chmod(0o600)  # the key is in the file: keep it private
+    return path
+
+
+def _toml_value(value: object) -> str:
+    if isinstance(value, bool):
+        return "true" if value else "false"
+    if isinstance(value, (int, float)):
+        return repr(value)
+    return json.dumps(str(value), ensure_ascii=False)
 
 
 def _expected_type(default: object, value: object) -> str | None:

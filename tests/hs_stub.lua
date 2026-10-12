@@ -59,7 +59,10 @@ hs = {
     bindHotkeysToSpec = function(spec) HOTKEYS = spec end,
   },
   fs = { attributes = function() return {} end },
-  alert = { show = function(message) log("alert " .. message) end },
+  alert = {
+    show = function(message) log("alert " .. message); return message end,
+    closeSpecific = function() end,
+  },
   json = { encode = json_encode, decode = json_decode },
   window = { focusedWindow = function() return TARGET end },
   screen = { mainScreen = function() return screen end },

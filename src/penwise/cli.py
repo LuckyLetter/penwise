@@ -1,15 +1,15 @@
-"""Command-line interface: `penwise check`, `penwise insights`, and setup helpers."""
+"""Command-line interface: `penwise setup`, `penwise check`, `penwise model`, and friends."""
 
 from __future__ import annotations
 
 import argparse
+import dataclasses
 import json
 import platform
 import sys
 import time
-from pathlib import Path
 
-from penwise import __version__, config, engine, history, render, setup_mac
+from penwise import __version__, config, engine, history, presets, render, setup_mac, wizard
 from penwise.config import ConfigError
 from penwise.lessons import LABELS
 from penwise.llm import ChatClient, LLMError
@@ -24,6 +24,8 @@ def main(argv: list[str] | None = None) -> int:
         argv = ["check"]  # `pbpaste | penwise` just works
     args = parser.parse_args(argv)
     if not args.command:
+        if not config.config_path().exists():
+            print("Welcome to Penwise! Run `penwise setup` to get started.\n")
         parser.print_help()
         return 0
     try:
@@ -33,7 +35,11 @@ def main(argv: list[str] | None = None) -> int:
             print(json.dumps({"type": "error", "message": str(exc)}), flush=True)
         print(f"penwise: {exc}", file=sys.stderr)
         return 1
+    except EOFError:
+        print("\npenwise: this command asks questions, so run it in a terminal.", file=sys.stderr)
+        return 1
     except KeyboardInterrupt:
+        print()
         return 130
 
 
@@ -45,6 +51,9 @@ def build_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument("--version", action="version", version=f"penwise {__version__}")
     sub = parser.add_subparsers(dest="command", metavar="<command>")
+
+    p = sub.add_parser("setup", help="guided setup: choose a model, save your key, install the hotkey")
+    p.set_defaults(run=cmd_setup)
 
     p = sub.add_parser("check", help="check a text (argument or stdin) and show each change")
     p.add_argument("text", nargs="*", help="text to check; read from stdin if omitted")
@@ -59,6 +68,17 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--base-url", help="override the API base URL from the config")
     p.set_defaults(run=cmd_check)
 
+    p = sub.add_parser("model", help="show the model in use, or switch to another one")
+    p.add_argument("id", nargs="?", help="model to switch to, e.g. mistralai/mistral-small-2603")
+    p.add_argument("--no-test", action="store_true", help="switch without testing the model first")
+    p.set_defaults(run=cmd_model)
+
+    p = sub.add_parser("config", help="show settings, or change one")
+    p.add_argument("action", nargs="?", choices=("show", "set", "unset"), default="show")
+    p.add_argument("name", nargs="?", help=f"one of: {', '.join(config.SETTINGS)}")
+    p.add_argument("value", nargs="?")
+    p.set_defaults(run=cmd_config)
+
     p = sub.add_parser("insights", help="show the fixes you make most often")
     p.add_argument("-n", "--limit", type=int, default=8, help="how many items to show (default: 8)")
     p.set_defaults(run=cmd_insights)
@@ -67,20 +87,23 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--clear", action="store_true", help="delete the history file")
     p.set_defaults(run=cmd_history)
 
-    p = sub.add_parser("init", help="create a config file with comments")
-    p.add_argument("--force", action="store_true", help="overwrite an existing config file")
-    p.set_defaults(run=cmd_init)
-
     p = sub.add_parser("doctor", help="check your setup and test the model")
     p.set_defaults(run=cmd_doctor)
 
-    p = sub.add_parser("setup-mac", help="install the Hammerspoon hotkey and review panel")
-    p.add_argument("-y", "--yes", action="store_true", help="don't ask before editing ~/.hammerspoon/init.lua")
+    p = sub.add_parser("init", help="write a config file with every setting explained")
+    p.add_argument("--force", action="store_true", help="overwrite an existing config file")
+    p.set_defaults(run=cmd_init)
+
+    p = sub.add_parser("setup-mac", help="install or update only the hotkey (part of `penwise setup`)")
     p.set_defaults(run=cmd_setup_mac)
 
     p = sub.add_parser("record", help="save accepted changes (JSON on stdin); used by the Mac panel")
     p.set_defaults(run=cmd_record)
     return parser
+
+
+def cmd_setup(args: argparse.Namespace) -> int:
+    return wizard.run()
 
 
 def cmd_check(args: argparse.Namespace) -> int:
@@ -121,6 +144,56 @@ def cmd_check(args: argparse.Namespace) -> int:
         print(json.dumps(result.to_dict(), indent=2, ensure_ascii=False))
     elif fmt == "pretty":
         render.write_pretty(result)
+    return 0
+
+
+def cmd_model(args: argparse.Namespace) -> int:
+    cfg = config.load()
+    if not args.id:
+        print(f"Model: {cfg.model}  ({cfg.base_url})")
+        provider = presets.provider_for(cfg.base_url)
+        if provider and provider.models:
+            print("\nSuggestions:")
+            for model in provider.models:
+                print(f"  {model.id:<30} {model.blurb}")
+        print("\nSwitch with: penwise model <id>")
+        return 0
+
+    effort = presets.reasoning_effort_for(args.id)
+    if not args.no_test:
+        print(f"Testing {args.id}… ", end="", flush=True)
+        trial = dataclasses.replace(cfg, model=args.id, reasoning_effort=effort)
+        try:
+            started = time.monotonic()
+            result = engine.check(wizard.TEST_SENTENCE, ChatClient.from_config(trial).chat)
+        except LLMError as exc:
+            print(f"✗\n{exc}\nStill using {cfg.model}.")
+            return 1
+        print(f'✓ "{result.edited}" ({time.monotonic() - started:.1f}s)')
+    config.set_values({"model": args.id, "reasoning_effort": effort or None})
+    print(f"Now using {args.id}.")
+    return 0
+
+
+def cmd_config(args: argparse.Namespace) -> int:
+    path = config.config_path()
+    if args.action == "show":
+        cfg = config.load()
+        print(f"{path}{'' if path.exists() else ' (not created yet: run `penwise setup`)'}\n")
+        for name in config.SETTINGS:
+            if name.startswith("api_key"):
+                continue
+            value = getattr(cfg, name)
+            shown = str(value).lower() if isinstance(value, bool) else (value if value != "" else "(default)")
+            print(f"  {name:<17} {shown}")
+        print(f"  {'api key':<17} {cfg.describe_key()}")
+        print("\nChange one with: penwise config set <name> <value>")
+        return 0
+    if not args.name or (args.action == "set" and args.value is None):
+        raise ConfigError(f"Usage: penwise config {args.action} <name>{' <value>' if args.action == 'set' else ''}")
+    value = None if args.action == "unset" else config.parse_value(args.name, args.value)
+    config.set_values({args.name: value})
+    print(f"{args.name} {'reset to default' if value is None else f'= {args.value}'}")
     return 0
 
 
@@ -177,7 +250,7 @@ def cmd_doctor(args: argparse.Namespace) -> int:
         print(f"{'✓' if good else '✗'} {label:<11} {status}")
 
     path = config.config_path()
-    line("Config", f"{path}" if path.exists() else f"{path} (not found, using defaults; run `penwise init`)")
+    line("Config", f"{path}" if path.exists() else f"{path} (not found, using defaults; run `penwise setup`)")
     try:
         cfg = config.load()
     except ConfigError as exc:
@@ -195,44 +268,22 @@ def cmd_doctor(args: argparse.Namespace) -> int:
         seconds = time.monotonic() - started
         line("Test", f'"{sample}" → "{result.edited}" ({seconds:.1f}s)')
     except (ConfigError, LLMError) as exc:
-        line("Test", str(exc), good=False)
+        line("Test", f"{exc}\n              To change settings, run `penwise setup`.", good=False)
         ok = False
 
     if platform.system() == "Darwin":
-        has_app = Path("/Applications/Hammerspoon.app").exists()
-        line("Hammerspoon", "installed" if has_app else "not found (brew install --cask hammerspoon)", has_app)
-        spoon = setup_mac.hammerspoon_dir() / "Spoons" / setup_mac.SPOON_NAME
-        line("Spoon", "installed" if spoon.exists() else "not installed (run `penwise setup-mac`)", spoon.exists())
-        ok = ok and has_app and spoon.exists()
+        has_app = setup_mac.hammerspoon_installed()
+        spoon = (setup_mac.hammerspoon_dir() / "Spoons" / setup_mac.SPOON_NAME).exists()
+        line("Hotkey", "installed" if has_app and spoon else "not installed (run `penwise setup`)", has_app and spoon)
+        ok = ok and has_app and spoon
     return 0 if ok else 1
 
 
 def cmd_setup_mac(args: argparse.Namespace) -> int:
     if platform.system() != "Darwin":
-        print("setup-mac is for macOS. On other systems, use `penwise check` from the terminal.")
+        print("The hotkey is for macOS. On other systems, use `penwise check` in the terminal.")
         return 1
-    target = setup_mac.install_spoon()
-    print(f"Installed {target}")
-
-    init_file = setup_mac.hammerspoon_dir() / "init.lua"
-    if setup_mac.needs_snippet(init_file):
-        print(f"\nThese lines will be added to {init_file}:\n{setup_mac.snippet()}")
-        if args.yes or input("Add them now? [Y/n] ").strip().lower() in ("", "y", "yes"):
-            setup_mac.add_snippet(init_file)
-            print(f"Updated {init_file}")
-        else:
-            print("Skipped. Add the lines yourself when you are ready.")
-    else:
-        print(f"{init_file} already loads Penwise.")
-
-    print(
-        "\nNext steps:\n"
-        "  1. Open Hammerspoon and choose “Reload Config” from its menu bar icon.\n"
-        "  2. Allow Hammerspoon in System Settings → Privacy & Security → Accessibility\n"
-        "     (needed to copy your selection and paste the result).\n"
-        "  3. Select some text in any app and press ⌃⌥P."
-    )
-    return 0
+    return 0 if wizard.setup_hotkey() else 1
 
 
 if __name__ == "__main__":

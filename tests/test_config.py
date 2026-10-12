@@ -57,3 +57,35 @@ def test_api_key_sources(monkeypatch):
 def test_failing_key_command_is_reported():
     with pytest.raises(ConfigError, match="did not print a key"):
         Config(api_key_command=f'"{sys.executable}" -c "raise SystemExit(1)"').resolve_api_key()
+
+
+def test_set_values_keeps_comments_and_other_settings(tmp_path):
+    path = config.write_template(tmp_path / "config.toml")
+    config.set_values({"model": "mistralai/mistral-small-2603", "reasoning_effort": "low"}, path)
+    text = path.read_text()
+    assert "# Penwise settings." in text
+    assert 'model = "mistralai/mistral-small-2603"' in text
+    assert config.load(path).reasoning_effort == "low"
+    config.set_values({"reasoning_effort": None}, path)
+    assert config.load(path).reasoning_effort == ""
+
+
+def test_set_values_never_writes_a_broken_file(tmp_path):
+    path = tmp_path / "config.toml"
+    with pytest.raises(ConfigError):
+        config.set_values({"mode": "rewrite"}, path)
+    assert not path.exists()
+
+
+def test_write_config_keeps_a_key_private(tmp_path):
+    path = config.write_config({"model": "m", "api_key": "secret"}, tmp_path / "config.toml")
+    assert config.load(path).api_key == "secret"
+    assert path.stat().st_mode & 0o077 == 0
+
+
+@pytest.mark.parametrize(
+    "name, raw, value",
+    [("explain", "on", True), ("timeout", "30", 30), ("temperature", "0.1", 0.1), ("model", "x", "x")],
+)
+def test_parse_value(name, raw, value):
+    assert config.parse_value(name, raw) == value

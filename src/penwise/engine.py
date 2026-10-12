@@ -5,6 +5,7 @@ from __future__ import annotations
 import re
 import time
 from collections.abc import Callable
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass, field
 
 from penwise import diff as textdiff
@@ -16,6 +17,8 @@ from penwise.llm import LLMError
 # or rewriting the text instead of editing it, and is not offered to you.
 MIN_SIMILARITY = {"fix": 0.5, "improve": 0.25}
 EXPLAIN_BATCH = 8
+# Paragraphs are sent to the model at the same time, up to this many at once.
+PARALLEL_REQUESTS = 4
 
 _PARAGRAPH_BREAK = re.compile(r"\n[ \t]*\n\s*")
 _SENTENCE_BREAK = re.compile(r"(?<=[.!?])\s+(?=[\"“(\[]?[A-Z0-9])")
@@ -184,19 +187,18 @@ def check(
     result = Result(original=text, mode=mode, model=model)
     edited_chunks: list[tuple[str, str, list[Change]]] = []  # (original, edited, changes) per chunk
 
-    for piece, editable in split(text, max_chunk_chars):
+    pieces = split(text, max_chunk_chars)
+    edits = iter(_parallel([lambda p=piece: _edit(chat, p, mode) for piece, editable in pieces if editable]))
+    for piece, editable in pieces:
         if not editable:
             _append(result.segments, piece)
             continue
-        system, messages = prompts.edit_messages(piece, mode)
-        edited = clean(chat(system, messages), piece)
-        problem = sanity_check(piece, edited, mode)
+        edited, problem = next(edits)
         if problem:
             result.warnings.append(
                 f"Part of your text was left as is because {problem}. "
                 "Try again, try the other mode, or use a larger model."
             )
-            edited = piece
         segments, changes = textdiff.diff(piece, edited, first_id=len(result.changes))
         for seg in segments:
             _append(result.segments, seg)
@@ -211,15 +213,36 @@ def check(
     emit(result.to_dict())
 
     if explain:
-        for original_chunk, edited_chunk, changes in edited_chunks:
-            for i in range(0, len(changes), EXPLAIN_BATCH):
-                batch = changes[i : i + EXPLAIN_BATCH]
-                reasons = explain_changes(chat, original_chunk, edited_chunk, batch)
+        batches = [
+            (original_chunk, edited_chunk, changes[i : i + EXPLAIN_BATCH])
+            for original_chunk, edited_chunk, changes in edited_chunks
+            for i in range(0, len(changes), EXPLAIN_BATCH)
+        ]
+        with ThreadPoolExecutor(max_workers=PARALLEL_REQUESTS) as pool:
+            futures = {pool.submit(explain_changes, chat, *batch): batch[2] for batch in batches}
+            for future in as_completed(futures):  # show each batch of reasons as soon as it arrives
+                reasons = future.result()
                 if reasons:
-                    for change in batch:
+                    for change in futures[future]:
                         change.reason = reasons.get(change.id, change.reason)
                     emit({"type": "explanations", "reasons": {str(k): v for k, v in reasons.items()}})
     return result
+
+
+def _edit(chat: Chat, piece: str, mode: str) -> tuple[str, str | None]:
+    """Ask the model to edit one piece. Returns (edited text, why it was rejected or None)."""
+    system, messages = prompts.edit_messages(piece, mode)
+    edited = clean(chat(system, messages), piece)
+    problem = sanity_check(piece, edited, mode)
+    return (piece, problem) if problem else (edited, None)
+
+
+def _parallel(calls: list[Callable]) -> list:
+    """Run the calls at the same time and return their results in order."""
+    if len(calls) <= 1:
+        return [call() for call in calls]
+    with ThreadPoolExecutor(max_workers=PARALLEL_REQUESTS) as pool:
+        return list(pool.map(lambda call: call(), calls))
 
 
 def explain_changes(chat: Chat, original: str, edited: str, changes: list[Change]) -> dict[int, str]:

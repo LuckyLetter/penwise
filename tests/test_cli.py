@@ -3,7 +3,7 @@ import json
 
 import pytest
 
-from penwise import cli, history
+from penwise import cli, config, history
 
 
 def run(args, monkeypatch, capsys, stdin=""):
@@ -94,3 +94,56 @@ def test_help(args, monkeypatch, capsys):
     with pytest.raises(SystemExit) as exit_info:
         run(args, monkeypatch, capsys)
     assert exit_info.value.code == 0
+
+
+def test_model_switch_is_tested_and_saved(server, isolated, monkeypatch, capsys):
+    config.set_values({"base_url": server.url, "model": "old-model"})
+    code, out, _ = run(["model", "openai/gpt-6-luna"], monkeypatch, capsys)
+    assert code == 0 and "Now using openai/gpt-6-luna" in out
+    cfg = config.load()
+    assert (cfg.model, cfg.reasoning_effort) == ("openai/gpt-6-luna", "none")
+    assert server.requests[-1]["model"] == "openai/gpt-6-luna"
+
+    run(["model", "mistralai/mistral-small-2603"], monkeypatch, capsys)
+    assert config.load().reasoning_effort == ""  # Mistral Small doesn't think by default
+
+
+def test_a_model_that_fails_the_test_is_not_saved(server, isolated, monkeypatch, capsys):
+    config.set_values({"base_url": server.url, "model": "old-model"})
+    server.status = 404
+    code, out, _ = run(["model", "no/such-model"], monkeypatch, capsys)
+    assert code == 1 and "Still using old-model" in out
+    assert config.load().model == "old-model"
+
+
+def test_model_without_an_id_lists_suggestions(isolated, monkeypatch, capsys):
+    config.set_values({"base_url": "https://openrouter.ai/api/v1", "model": "x"})
+    _, out, _ = run(["model"], monkeypatch, capsys)
+    assert "mistralai/mistral-small-2603" in out
+
+
+def test_config_set_show_and_unset(isolated, monkeypatch, capsys):
+    run(["config", "set", "timeout", "30"], monkeypatch, capsys)
+    run(["config", "set", "explain", "yes"], monkeypatch, capsys)
+    assert (config.load().timeout, config.load().explain) == (30, True)
+    _, out, _ = run(["config"], monkeypatch, capsys)
+    assert "timeout           30" in out and "explain           true" in out
+    run(["config", "unset", "timeout"], monkeypatch, capsys)
+    assert config.load().timeout == 60
+
+
+def test_config_rejects_bad_input(isolated, monkeypatch, capsys):
+    code, _, err = run(["config", "set", "explain", "maybe"], monkeypatch, capsys)
+    assert code == 1 and "true or false" in err
+    code, _, err = run(["config", "set", "modle", "x"], monkeypatch, capsys)
+    assert code == 1 and "Unknown setting" in err
+
+
+def test_first_run_points_to_setup(isolated, monkeypatch, capsys):
+    class Terminal(io.StringIO):
+        def isatty(self):
+            return True
+
+    monkeypatch.setattr("sys.stdin", Terminal())
+    assert cli.main([]) == 0
+    assert "Run `penwise setup` to get started" in capsys.readouterr().out
