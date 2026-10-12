@@ -1,0 +1,54 @@
+[build-system]
+requires = ["hatchling>=1.18"]
+build-backend = "hatchling.build"
+
+[project]
+name = "penwise"
+version = "0.1.0"
+description = "Select text anywhere on your Mac, press a hotkey, and get English fixes you can learn from."
+readme = "README.md"
+license = "Apache-2.0"
+requires-python = ">=3.10"
+authors = [{ name = "LuckyLetter" }]
+keywords = ["writing", "grammar", "english", "llm", "ollama", "hammerspoon"]
+classifiers = [
+    "Environment :: Console",
+    "Environment :: MacOS X",
+    "Intended Audience :: Science/Research",
+    "Operating System :: MacOS",
+    "Programming Language :: Python :: 3",
+    "Topic :: Text Processing :: Linguistic",
+]
+dependencies = [
+    "certifi",
+    "tomli>=1.1; python_version < '3.11'",
+]
+
+[project.optional-dependencies]
+# lupa runs the Hammerspoon Spoon in tests; playwright drives the review panel.
+# Both test files are skipped when these are missing.
+dev = ["pytest>=8", "ruff>=0.6", "lupa>=2", "playwright>=1.45"]
+
+[project.scripts]
+penwise = "penwise.cli:main"
+
+[project.urls]
+Homepage = "https://github.com/LuckyLetter/penwise"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/penwise"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+
+[tool.ruff]
+line-length = 120
+target-version = "py310"
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "B", "UP", "SIM"]
+
+[tool.ruff.lint.per-file-ignores]
+# Teaching notes and prompt examples are prose; wrapping them hurts readability.
+"src/penwise/lessons.py" = ["E501"]
+"src/penwise/prompts.py" = ["E501"]
