@@ -38,8 +38,10 @@ def test_keychain_round_trip(monkeypatch):
 
 
 def hs(lua: str, timeout: float = 10) -> str:
+    """Run Lua inside Hammerspoon and return the last line it printed."""
     out = subprocess.run([HS, "-c", lua], capture_output=True, text=True, timeout=timeout)
-    return out.stdout.strip()
+    lines = [line for line in out.stdout.splitlines() if line.strip()]
+    return lines[-1].strip() if lines else ""
 
 
 def wait_for(lua: str, done, seconds: float = 60) -> str:
@@ -53,7 +55,7 @@ def wait_for(lua: str, done, seconds: float = 60) -> str:
         if done(value):
             return value
         time.sleep(1)
-    console = hs("return hs.console.getConsole()")
+    console = subprocess.run([HS, "-c", "return hs.console.getConsole()"], capture_output=True, text=True).stdout
     pytest.fail(f"Timed out waiting for {lua!r}; last value {value!r}\nHammerspoon console:\n{console}")
 
 
@@ -89,4 +91,5 @@ def test_review_panel_and_quick_fix_in_real_hammerspoon(hammerspoon):
         ' function(event) if event.type == "result" then QUICK = event.edited end end); return "ok"'
     )
     assert wait_for("return tostring(QUICK)", lambda v: v not in ("", "nil")) == "Wait until noon."
-    assert "error" not in hs("return hs.console.getConsole()").lower()
+    console = subprocess.run([HS, "-c", "return hs.console.getConsole()"], capture_output=True, text=True).stdout
+    assert "stack traceback" not in console, console
