@@ -91,7 +91,8 @@ Every model is reached the same way, through an OpenAI-compatible chat API, so s
 | Ollama (default)      | `http://localhost:11434/v1`     | `gemma3:1b`, `llama3.2:1b`                |
 | LM Studio             | `http://localhost:1234/v1`      | the model id shown in LM Studio           |
 | MLX (`mlx_lm.server`) | `http://localhost:8080/v1`      | `mlx-community/Llama-3.2-1B-Instruct-4bit` |
-| A cloud service       | the service's OpenAI-compatible URL, e.g. `https://api.openai.com/v1` | a model from that service |
+| OpenRouter (one key, many cloud models) | `https://openrouter.ai/api/v1` | an id from openrouter.ai/models, e.g. `openai/gpt-6-luna` |
+| Another cloud service | the service's OpenAI-compatible URL, e.g. `https://api.openai.com/v1` | a model from that service |
 
 **About 1B models:** they catch common errors well (verb agreement, articles, prepositions, spelling, *then/than*).
 They miss some errors and now and then over-edit, which is why every change can be undone. The prompts were tuned

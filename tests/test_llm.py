@@ -20,6 +20,25 @@ def test_no_key_means_no_authorization_header(server):
     assert "Authorization" not in server.headers[0]
 
 
+def test_retries_without_temperature_when_the_model_rejects_it(server):
+    def reply(body):
+        if "temperature" in body:
+            raise server.Reject(400, "Unsupported value: 'temperature' does not support 0.2 with this model.")
+        return "Fixed."
+
+    server.reply = reply
+    assert ChatClient(server.url, "reasoning-model").chat("s", []) == "Fixed."
+    assert [("temperature" in body) for body in server.requests] == [True, False]
+
+
+def test_other_bad_requests_are_not_retried(server):
+    server.status = 400
+    server.error = {"error": {"message": "context length exceeded"}}
+    with pytest.raises(LLMError, match="context length exceeded"):
+        ChatClient(server.url, "m").chat("s", [])
+    assert len(server.requests) == 1
+
+
 def test_missing_model_suggests_a_fix(server):
     server.status = 404
     server.error = {"error": {"message": 'model "x" not found'}}

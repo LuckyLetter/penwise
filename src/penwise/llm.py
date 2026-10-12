@@ -17,7 +17,9 @@ from penwise.config import Config
 
 
 class LLMError(Exception):
-    pass
+    def __init__(self, message: str, status: int | None = None):
+        super().__init__(message)
+        self.status = status
 
 
 class ChatClient:
@@ -32,15 +34,21 @@ class ChatClient:
     def from_config(cls, cfg: Config) -> ChatClient:
         return cls(cfg.base_url, cfg.model, cfg.resolve_api_key(), cfg.temperature, cfg.timeout)
 
-    def chat(self, system: str, messages: list[dict], max_tokens: int = 2048) -> str:
+    def chat(self, system: str, messages: list[dict]) -> str:
         body = {
             "model": self.model,
             "messages": [{"role": "system", "content": system}, *messages],
             "temperature": self.temperature,
-            "max_tokens": max_tokens,
             "stream": False,
         }
-        data = self._post("/chat/completions", body)
+        try:
+            data = self._post("/chat/completions", body)
+        except LLMError as exc:
+            # Some models (reasoning models in particular) only accept their default temperature.
+            if exc.status != 400 or "temperature" not in str(exc):
+                raise
+            del body["temperature"]
+            data = self._post("/chat/completions", body)
         try:
             content = data["choices"][0]["message"]["content"]
         except (KeyError, IndexError, TypeError) as exc:
@@ -57,7 +65,7 @@ class ChatClient:
             with urllib.request.urlopen(request, timeout=self.timeout, context=_ssl_context()) as response:
                 return json.loads(response.read().decode("utf-8"))
         except urllib.error.HTTPError as exc:
-            raise LLMError(self._http_error_message(exc)) from exc
+            raise LLMError(self._http_error_message(exc), status=exc.code) from exc
         except TimeoutError as exc:
             raise LLMError(
                 f"The model took longer than {self.timeout:g}s to answer. "

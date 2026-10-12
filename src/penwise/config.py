@@ -38,7 +38,11 @@ model = "gemma3:1b"
 # base_url = "http://localhost:8080/v1"
 # model = "mlx-community/Llama-3.2-1B-Instruct-4bit"
 
-# --- Cloud: any OpenAI-compatible service (OpenAI, OpenRouter, Groq, ...)
+# --- Cloud: OpenRouter, one key for many models (ids at openrouter.ai/models)
+# base_url = "https://openrouter.ai/api/v1"
+# model = "openai/gpt-6-luna"
+
+# --- Cloud: any other OpenAI-compatible service (OpenAI, Groq, ...)
 # base_url = "https://api.openai.com/v1"
 # model = "a-model-name-from-your-provider"
 #
