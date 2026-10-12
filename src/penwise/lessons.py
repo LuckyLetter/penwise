@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import os
 
-from penwise.diff import WORD, Change
+from penwise.diff import NEEDS_FILL, WORD, Change
 
 ARTICLES = {"a", "an", "the"}
 
@@ -153,6 +153,7 @@ LABELS = {
     "added": "Missing word",
     "removed": "Extra words",
     "rephrased": "Rephrasing",
+    "filled": "Filled in",
 }
 
 NOTES = {
@@ -168,6 +169,7 @@ NOTES = {
     "added": "A missing word was added so the sentence is complete and grammatical.",
     "removed": "Words that add no meaning were removed; shorter is usually clearer.",
     "rephrased": "Reworded to read more naturally in English.",
+    "filled": "Your own words or [[note]], written in English for you. Learn this phrase for next time.",
 }
 
 A_AN_NOTE = "Use “an” before a vowel sound (an hour, an LLM, an MRI scan) and “a” before a consonant sound (a user, a one-off, a URL)."
@@ -188,6 +190,8 @@ def classify(before: str, after: str) -> tuple[str, str]:
     b, a = before.strip(), after.strip()
     bw, aw = words(b), words(a)
 
+    if NEEDS_FILL.search(b):
+        return "filled", NOTES["filled"]
     if b == a:
         return "spacing", NOTES["spacing"]
     if b.lower() == a.lower():

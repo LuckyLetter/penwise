@@ -24,6 +24,12 @@ obj.bin = os.getenv("HOME") .. "/.local/bin/penwise"
 --- Arguments placed before the subcommand, e.g. `{ "-m", "penwise" }` when `bin` is a Python interpreter.
 obj.args = {}
 
+--- Penwise.wholeFieldLimit
+--- Variable
+--- With nothing selected, a text field holding at most this many characters (a message,
+--- a comment, a form field) is checked as a whole. Set to 0 to always require a selection.
+obj.wholeFieldLimit = 2000
+
 obj.logger = hs.logger.new("Penwise")
 
 local spoonPath = hs.spoons.scriptPath()
@@ -151,13 +157,28 @@ function obj:_withSelection(callback)
   end)
 end
 
--- Ask the app for its selected text; if it can't say, copy it with ⌘C.
+local TEXT_FIELD_ROLES = { AXTextArea = true, AXTextField = true, AXComboBox = true }
+
+local function attribute(element, name)
+  local ok, value = pcall(function() return element:attributeValue(name) end)
+  if ok then return value end
+end
+
+-- Ask the app for its selected text. With nothing selected in a short text field, select
+-- and use the whole field. If the app can't say, copy the selection with ⌘C.
 function obj:_readSelection(callback)
-  local element = hs.uielement.focusedElement()
-  if element and element.selectedText then
-    local ok, text = pcall(function() return element:selectedText() end)
-    if ok and text and text:find("%S") then
-      callback(text)
+  local element = attribute(hs.axuielement.systemWideElement(), "AXFocusedUIElement")
+  if element then
+    local selected = attribute(element, "AXSelectedText")
+    if type(selected) == "string" and selected:find("%S") then
+      callback(selected)
+      return
+    end
+    local value = attribute(element, "AXValue")
+    if TEXT_FIELD_ROLES[attribute(element, "AXRole")] and type(value) == "string" and value:find("%S")
+      and #value <= self.wholeFieldLimit then
+      hs.eventtap.keyStroke({ "cmd" }, "a", 0)
+      callback(value)
       return
     end
   end

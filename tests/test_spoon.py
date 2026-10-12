@@ -23,7 +23,7 @@ class Spoon:
         self.lua = lua54.LuaRuntime(unpack_returned_tuples=True)
         g = self.lua.globals()
         g.SPOON_DIR = str(setup_mac.spoon_source()) + "/"
-        g.SELECTION = SELECTION
+        g.FIELD = self.to_lua({"AXRole": "AXTextArea", "AXSelectedText": SELECTION, "AXValue": SELECTION})
         g.DELIVERY = delivery
         g.json_encode = lambda table: json.dumps(self.to_python(table))
         g.json_decode = lambda text: self.to_lua(json.loads(text))
@@ -141,8 +141,42 @@ def test_quick_fix_replaces_right_away(config):
 
 def test_quick_fix_says_when_there_is_nothing_to_fix(config):
     spoon = Spoon("stream")
-    spoon.lua.globals().SELECTION = "All good here."
+    spoon.lua.globals().FIELD = spoon.to_lua({"AXRole": "AXTextArea", "AXSelectedText": "All good here."})
     spoon.run("spoon:quickFix()")
     spoon.run_tasks()
     assert "alert Penwise: looks good, nothing to fix" in spoon.log
     assert not any(line.startswith("cmd+v") for line in spoon.log)
+
+
+def test_with_nothing_selected_a_short_field_is_checked_whole(config):
+    spoon = Spoon("stream")
+    field = "Wait untill noon, please."
+    spoon.lua.globals().FIELD = spoon.to_lua({"AXRole": "AXTextField", "AXSelectedText": "", "AXValue": field})
+    spoon.run('spoon:check("fix")')
+    spoon.message({"action": "ready"})
+    spoon.run_tasks()
+    assert spoon.log[0] == "cmd+a: user clipboard"  # the whole field gets selected, so the paste replaces it
+    assert spoon.events[0]["original"] == field
+
+
+def test_with_nothing_selected_elsewhere_it_asks_for_a_selection(config):
+    spoon = Spoon("stream")
+    spoon.lua.globals().FIELD = spoon.to_lua({"AXRole": "AXButton", "AXSelectedText": "", "AXValue": "OK"})
+    spoon.run('spoon:check("fix")')
+    spoon.run_tasks()
+    assert "cmd+a: user clipboard" not in spoon.log
+    assert spoon.log[-1] == "alert Penwise: select some text first"
+    assert spoon.lua.globals().CLIPBOARD == "user clipboard"
+
+
+def test_apps_without_accessibility_text_use_copy(config):
+    spoon = Spoon("stream")
+    g = spoon.lua.globals()
+    g.FIELD = spoon.to_lua({})
+    g.COPY_RESULT = "Wait untill noon."
+    spoon.run('spoon:check("fix")')
+    spoon.run_tasks()  # the copy is read from a timer, like in Hammerspoon
+    spoon.message({"action": "ready"})
+    assert spoon.log[0] == "cmd+c: user clipboard"
+    assert spoon.events[0]["original"] == "Wait untill noon."
+    assert g.CLIPBOARD == "user clipboard"  # put back right after copying

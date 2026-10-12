@@ -30,6 +30,8 @@ from penwise.lessons import A_AN_NOTE, COMMA_ADDED_NOTE, LABELS, annotate, class
         ("very ", "", "removed"),
         ("in order to", "to", "removed"),
         ("make a proposal of", "propose", "rephrased"),
+        ("图像分割", "image segmentation", "filled"),
+        ("[[show very clear]]", "clearly show", "filled"),
     ],
 )
 def test_classify(before, after, category):

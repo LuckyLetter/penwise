@@ -145,3 +145,32 @@ def test_paragraphs_are_checked_at_the_same_time():
     result = engine.check(text, slow_chat)
     assert time.monotonic() - started < 0.9  # one after another would take 1.2s
     assert result.edited == text
+
+
+@pytest.mark.parametrize(
+    "text, fill",
+    [
+        ("我们提出 a method.", True),
+        ("We [[want to say: no time]].", True),
+        ("Привет, world.", True),
+        ("As shown in [12], α grows.", False),
+        ("A naïve café.", False),
+    ],
+)
+def test_needs_fill(text, fill):
+    assert engine.needs_fill(text) is fill
+
+
+def test_mixed_language_text_is_filled_in():
+    chat = fake_chat({"图像分割": "In this paper, we propose a method for image segmentation."})
+    result = engine.check("In this paper, 我们提出 a method for 图像分割.", chat)
+    assert result.edited == "In this paper, we propose a method for image segmentation."
+    assert chat.calls[0].startswith("Write this in English:")
+    assert {c.category for c in result.changes} == {"filled"}
+    assert not result.warnings
+
+
+def test_filling_in_allows_a_longer_answer_but_not_a_reply():
+    original = "我们的方法很好。"
+    assert engine.sanity_check(original, "Our method works very well, as the results show.", "fix", fill=True) is None
+    assert engine.sanity_check(original, "Sure! Here is the translation:", "fix", fill=True) is not None

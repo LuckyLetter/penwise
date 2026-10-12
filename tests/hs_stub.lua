@@ -1,5 +1,6 @@
 -- A minimal stand-in for the Hammerspoon APIs the Penwise Spoon uses.
--- Tests set SPOON_DIR, SELECTION, run_command(path, args, input) and the JSON helpers.
+-- Tests set SPOON_DIR, FIELD (the focused element's AX attributes), run_command(path, args,
+-- input) and the JSON helpers. COPY_RESULT, if set, is what ⌘C puts on the clipboard.
 
 LOG, JS = {}, {}
 CLIPBOARD, COUNT = "user clipboard", 1
@@ -22,7 +23,7 @@ function webview:evaluateJavaScript(js) table.insert(JS, js) end
 -- Tasks run when the test calls run_tasks(), standing in for Hammerspoon's event loop.
 -- As in Hammerspoon, setInput() only queues the input: it is written from the event
 -- loop, so stdin closed with closeInput() before then loses it.
-TASKS = {}
+TASKS, TIMERS = {}, {}
 
 local function newTask(path, done, stream, args)
   if type(stream) == "table" then args, stream = stream, nil end
@@ -35,7 +36,15 @@ local function newTask(path, done, stream, args)
 end
 
 function run_tasks()
-  while #TASKS > 0 do
+  while #TASKS > 0 or #TIMERS > 0 do
+    while #TIMERS > 0 do
+      local timer = table.remove(TIMERS, 1)
+      for _ = 1, 100 do
+        if not timer.running then break end
+        timer.fn()
+      end
+    end
+    if #TASKS == 0 then break end
     local task = table.remove(TASKS, 1)
     local input = (not task.closed and task.pending) or ""
     local out, err, code = run_command(task.path, task.args, input)
@@ -66,8 +75,11 @@ hs = {
   json = { encode = json_encode, decode = json_decode },
   window = { focusedWindow = function() return TARGET end },
   screen = { mainScreen = function() return screen end },
-  uielement = {
-    focusedElement = function() return { selectedText = function() return SELECTION end } end,
+  axuielement = {
+    systemWideElement = function()
+      local field = { attributeValue = function(_, name) return FIELD[name] end }
+      return { attributeValue = function(_, name) return name == "AXFocusedUIElement" and field or nil end }
+    end,
   },
   pasteboard = {
     readAllData = function() return { ["public.utf8-plain-text"] = CLIPBOARD } end,
@@ -77,8 +89,25 @@ hs = {
     clearContents = function() CLIPBOARD = nil end,
     changeCount = function() return COUNT end,
   },
-  eventtap = { keyStroke = function(_, key) log("cmd+" .. key .. ": " .. tostring(CLIPBOARD)) end },
-  timer = { doAfter = function(_, fn) fn(); return {} end, secondsSinceEpoch = os.time },
+  eventtap = {
+    keyStroke = function(_, key)
+      log("cmd+" .. key .. ": " .. tostring(CLIPBOARD))
+      if key == "c" and COPY_RESULT then
+        CLIPBOARD, COUNT = COPY_RESULT, COUNT + 1
+      end
+    end,
+  },
+  timer = {
+    doAfter = function(_, fn) fn(); return {} end,
+    -- Like Hammerspoon, repeating timers fire later, from the event loop (run_tasks).
+    doEvery = function(_, fn)
+      local timer = { fn = fn, running = true }
+      function timer:stop() self.running = false end
+      table.insert(TIMERS, timer)
+      return timer
+    end,
+    secondsSinceEpoch = function() CLOCK = (CLOCK or 0) + 0.1; return CLOCK end,
+  },
   focus = function() end,
   drawing = { windowLevels = { floating = 3 } },
   webview = {

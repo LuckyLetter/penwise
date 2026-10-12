@@ -28,7 +28,8 @@ _PREAMBLE = re.compile(
     re.IGNORECASE,
 )
 _LABEL = re.compile(
-    r"^\s*(?:(?:corrected|edited|revised|improved)(?: text| version)?|(?:correct|improve) this text)\s*:\s*",
+    r"^\s*(?:(?:corrected|edited|revised|improved)(?: text| version)?|(?:correct|improve) this text"
+    r"|write this in english)\s*:\s*",
     re.IGNORECASE,
 )
 _TRAILING_NOTE = re.compile(
@@ -152,17 +153,22 @@ def _match_quote_style(text: str, original: str) -> str:
     return text
 
 
-def sanity_check(original: str, edited: str, mode: str) -> str | None:
+def needs_fill(text: str) -> bool:
+    return bool(textdiff.NEEDS_FILL.search(text))
+
+
+def sanity_check(original: str, edited: str, mode: str, fill: bool = False) -> str | None:
     """Return a reason to reject the edit, or None if it looks like an edit of the original."""
     if not edited.strip():
         return "the model returned nothing"
     if _REPLY.match(edited) and not _REPLY.match(original):
         return "the model replied to your text instead of editing it"
-    if len(edited) > 2 * len(original) + 40:
+    # Text being filled in is partly translated, so it may grow a lot and share fewer words.
+    if len(edited) > (4 * len(original) + 80 if fill else 2 * len(original) + 40):
         return "the model's answer was much longer than your text"
-    if len(edited) < 0.3 * len(original):
+    if len(edited) < 0.3 * len(original) and not fill:
         return "the model's answer was much shorter than your text"
-    if textdiff.similarity(original, edited) < MIN_SIMILARITY[mode]:
+    if not fill and textdiff.similarity(original, edited) < MIN_SIMILARITY[mode]:
         return "the model's answer didn't look like an edit of your text"
     return None
 
@@ -231,9 +237,10 @@ def check(
 
 def _edit(chat: Chat, piece: str, mode: str) -> tuple[str, str | None]:
     """Ask the model to edit one piece. Returns (edited text, why it was rejected or None)."""
-    system, messages = prompts.edit_messages(piece, mode)
+    fill = needs_fill(piece)
+    system, messages = prompts.edit_messages(piece, mode, fill=fill)
     edited = clean(chat(system, messages), piece)
-    problem = sanity_check(piece, edited, mode)
+    problem = sanity_check(piece, edited, mode, fill=fill)
     return (piece, problem) if problem else (edited, None)
 
 
