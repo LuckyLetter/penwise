@@ -1,0 +1,394 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Penwise</title>
+<style>
+  :root {
+    --bg: #ffffff;
+    --surface: #f5f5f7;
+    --text: #1d1d1f;
+    --muted: #6e6e73;
+    --border: #e3e3e8;
+    --accent: #2f6fde;
+    --accent-text: #ffffff;
+    --del: #c4302b;
+    --del-bg: #fdecea;
+    --ins: #1f7a3d;
+    --ins-bg: #e6f4ea;
+    --warn-bg: #fff6e0;
+    --warn-text: #7a5300;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #1e1e20;
+      --surface: #2a2a2d;
+      --text: #f2f2f4;
+      --muted: #a1a1a6;
+      --border: #3a3a3e;
+      --accent: #4c8dff;
+      --del: #ff7b72;
+      --del-bg: #3d1f1f;
+      --ins: #6fdc8c;
+      --ins-bg: #1c3624;
+      --warn-bg: #3a2f14;
+      --warn-text: #f5d68a;
+    }
+  }
+  * { box-sizing: border-box; }
+  html, body { height: 100%; margin: 0; }
+  body {
+    display: flex;
+    flex-direction: column;
+    background: var(--bg);
+    color: var(--text);
+    font: 14px/1.5 -apple-system, BlinkMacSystemFont, "Helvetica Neue", sans-serif;
+    -webkit-user-select: none;
+    user-select: none;
+  }
+  header, footer {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 10px 16px;
+    border-color: var(--border);
+  }
+  header { border-bottom: 1px solid var(--border); }
+  footer { border-top: 1px solid var(--border); }
+  .spacer { flex: 1; }
+  .muted { color: var(--muted); font-size: 12px; }
+
+  .modes { display: inline-flex; background: var(--surface); border-radius: 7px; padding: 2px; }
+  .modes button {
+    border: 0;
+    background: transparent;
+    color: var(--muted);
+    font: inherit;
+    font-size: 13px;
+    padding: 3px 12px;
+    border-radius: 5px;
+    cursor: pointer;
+  }
+  .modes button[aria-pressed="true"] { background: var(--bg); color: var(--text); box-shadow: 0 1px 2px rgb(0 0 0 / 0.15); }
+
+  main { flex: 1; overflow-y: auto; padding: 14px 16px; }
+  .text {
+    white-space: pre-wrap;
+    word-wrap: break-word;
+    font-size: 15px;
+    line-height: 1.65;
+    -webkit-user-select: text;
+    user-select: text;
+  }
+  .loading .text { color: var(--muted); }
+  .status { margin-top: 12px; }
+  .pulse { animation: pulse 1.2s ease-in-out infinite; }
+  @keyframes pulse { 50% { opacity: 0.4; } }
+
+  .change { cursor: pointer; border-radius: 3px; }
+  .change del { color: var(--del); background: var(--del-bg); text-decoration-thickness: 1px; }
+  .change ins { color: var(--ins); background: var(--ins-bg); text-decoration: none; }
+  .change del + ins { margin-left: 2px; }
+  .change.undone { text-decoration: underline dotted var(--muted); text-underline-offset: 3px; }
+  .change.active { outline: 2px solid var(--accent); outline-offset: 1px; }
+
+  .banner { margin: 0 0 12px; padding: 8px 12px; border-radius: 8px; background: var(--warn-bg); color: var(--warn-text); }
+  .good { margin-top: 12px; color: var(--ins); font-weight: 500; }
+  .error { color: var(--del); }
+
+  h2 { margin: 18px 0 8px; font-size: 12px; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: 0.04em; }
+  ol { list-style: none; margin: 0; padding: 0; }
+  li {
+    display: grid;
+    grid-template-columns: 20px 1fr auto;
+    gap: 2px 10px;
+    padding: 9px 10px;
+    border-radius: 8px;
+    cursor: pointer;
+  }
+  li:hover, li.active { background: var(--surface); }
+  li.undone .what, li.undone .note { opacity: 0.45; }
+  li .num { color: var(--muted); font-size: 12px; padding-top: 2px; }
+  li .what { font-weight: 500; }
+  li .what del { color: var(--del); text-decoration-thickness: 1px; }
+  li .what ins { color: var(--ins); text-decoration: none; }
+  li .tag { font-size: 12px; color: var(--accent); white-space: nowrap; }
+  li .note, li .why, li .seen { grid-column: 2 / 4; font-size: 13px; color: var(--muted); }
+  li .why { color: var(--text); }
+  li .seen { font-size: 12px; }
+
+  button.primary, button.secondary {
+    font: inherit;
+    font-size: 13px;
+    border-radius: 7px;
+    padding: 5px 14px;
+    cursor: pointer;
+  }
+  button.primary { border: 0; background: var(--accent); color: var(--accent-text); }
+  button.secondary { border: 1px solid var(--border); background: var(--bg); color: var(--text); }
+  button:disabled { opacity: 0.4; cursor: default; }
+  kbd { font: inherit; font-size: 11px; opacity: 0.75; margin-left: 6px; }
+</style>
+</head>
+<body>
+<header>
+  <div class="modes" role="group" aria-label="Mode">
+    <button type="button" data-mode="fix" title="Only fix errors (Tab to switch)">Fix</button>
+    <button type="button" data-mode="improve" title="Also improve clarity and flow (Tab to switch)">Improve</button>
+  </div>
+  <span class="spacer"></span>
+  <span class="muted" id="model"></span>
+</header>
+
+<main id="main"></main>
+
+<footer>
+  <span class="muted" id="hint">Click a change to undo it.</span>
+  <span class="spacer"></span>
+  <button type="button" class="secondary" id="cancel">Cancel<kbd>esc</kbd></button>
+  <button type="button" class="secondary" id="copy">Copy<kbd>⌘C</kbd></button>
+  <button type="button" class="primary" id="replace">Replace<kbd>↩</kbd></button>
+</footer>
+
+<script>
+"use strict";
+
+// Messages to Hammerspoon. Outside Hammerspoon (e.g. in a browser) they are logged.
+function post(message) {
+  if (window.webkit && webkit.messageHandlers && webkit.messageHandlers.penwise) {
+    webkit.messageHandlers.penwise.postMessage(message);
+  } else {
+    console.log("penwise →", JSON.stringify(message));
+  }
+}
+
+const state = {
+  status: "idle", // idle | loading | ready | error
+  original: "",
+  mode: "fix",
+  model: "",
+  segments: [],
+  changes: [],
+  undone: new Set(),
+  warnings: [],
+  error: "",
+  explain: false,
+  explaining: false,
+};
+
+function el(tag, attrs, ...children) {
+  const node = document.createElement(tag);
+  for (const [key, value] of Object.entries(attrs || {})) {
+    if (key === "class") node.className = value;
+    else if (key.startsWith("on")) node.addEventListener(key.slice(2), value);
+    else node.setAttribute(key, value);
+  }
+  for (const child of children) {
+    if (child !== null && child !== undefined && child !== false) node.append(child);
+  }
+  return node;
+}
+
+function finalText() {
+  const byId = new Map(state.changes.map((c) => [c.id, c]));
+  return state.segments
+    .map((seg) => ("text" in seg ? seg.text : (state.undone.has(seg.change) ? byId.get(seg.change).before : byId.get(seg.change).after)))
+    .join("");
+}
+
+function acceptedChanges() {
+  return state.changes.filter((c) => !state.undone.has(c.id));
+}
+
+function toggle(id) {
+  if (state.undone.has(id)) state.undone.delete(id);
+  else state.undone.add(id);
+  render();
+}
+
+function highlight(id, on) {
+  document.querySelectorAll(`[data-change="${id}"]`).forEach((node) => node.classList.toggle("active", on));
+}
+
+function changeWords(change) {
+  const before = change.before.trim();
+  const after = change.after.trim();
+  if (before && after && /[\p{L}\p{N}]/u.test(before + after)) {
+    return [el("del", {}, before), " → ", el("ins", {}, after)];
+  }
+  // Small edits (a comma, an added or dropped word) are easier to read after the word before them.
+  const lead = (change.context_before.match(/\S+\s*$/) || [""])[0];
+  return [lead, change.before && el("del", {}, change.before), change.after && el("ins", {}, change.after)];
+}
+
+function renderText() {
+  const byId = new Map(state.changes.map((c) => [c.id, c]));
+  const text = el("div", { class: "text" });
+  for (const seg of state.segments) {
+    if ("text" in seg) {
+      text.append(seg.text);
+      continue;
+    }
+    const change = byId.get(seg.change);
+    const undone = state.undone.has(change.id);
+    text.append(
+      el(
+        "span",
+        {
+          class: "change" + (undone ? " undone" : ""),
+          "data-change": change.id,
+          title: undone ? "Click to apply this change" : "Click to undo this change",
+          onclick: () => toggle(change.id),
+          onmouseenter: () => highlight(change.id, true),
+          onmouseleave: () => highlight(change.id, false),
+        },
+        ...(undone ? [change.before] : [change.before && el("del", {}, change.before), change.after && el("ins", {}, change.after)]),
+      ),
+    );
+  }
+  return text;
+}
+
+function renderChanges() {
+  const list = el("ol");
+  state.changes.forEach((change, index) => {
+    const seen = change.seen ? `You've made this fix ${change.seen}× before.` : "";
+    list.append(
+      el(
+        "li",
+        {
+          class: state.undone.has(change.id) ? "undone" : "",
+          "data-change": change.id,
+          onclick: () => toggle(change.id),
+          onmouseenter: () => highlight(change.id, true),
+          onmouseleave: () => highlight(change.id, false),
+        },
+        el("span", { class: "num" }, index < 9 ? String(index + 1) : ""),
+        el("span", { class: "what" }, ...changeWords(change)),
+        el("span", { class: "tag" }, change.label),
+        el("span", { class: "note" }, change.note),
+        change.reason && el("span", { class: "why" }, "Why: " + change.reason),
+        seen && el("span", { class: "seen" }, seen),
+      ),
+    );
+  });
+  return list;
+}
+
+function render() {
+  document.querySelectorAll(".modes button").forEach((button) => {
+    button.setAttribute("aria-pressed", String(button.dataset.mode === state.mode));
+  });
+  document.getElementById("model").textContent = state.model;
+
+  const main = document.getElementById("main");
+  main.className = state.status;
+  main.replaceChildren();
+
+  if (state.status === "loading") {
+    main.append(el("div", { class: "text" }, state.original));
+    main.append(el("div", { class: "status muted pulse" }, state.mode === "fix" ? "Checking…" : "Improving…"));
+  } else if (state.status === "error") {
+    main.append(el("div", { class: "error" }, state.error));
+    main.append(el("div", { class: "status muted" }, "Run `penwise doctor` in Terminal to check your setup."));
+  } else if (state.status === "ready") {
+    for (const warning of state.warnings) main.append(el("div", { class: "banner" }, warning));
+    main.append(renderText());
+    if (state.changes.length) {
+      const title = `${state.changes.length} change${state.changes.length === 1 ? "" : "s"}` + (state.explaining ? " · explaining…" : "");
+      main.append(el("h2", {}, title), renderChanges());
+    } else if (!state.warnings.length) {
+      main.append(el("div", { class: "good" }, "Looks good. No changes suggested."));
+    }
+  }
+
+  const ready = state.status === "ready";
+  document.getElementById("replace").disabled = !ready;
+  document.getElementById("copy").disabled = !ready;
+  document.getElementById("hint").textContent = ready && state.changes.length ? "Click a change, or press its number, to undo it." : "";
+}
+
+function setMode(mode) {
+  if (mode !== state.mode && state.status !== "idle") post({ action: "mode", mode });
+}
+
+function replace() {
+  if (state.status !== "ready") return;
+  const accepted = acceptedChanges().map(({ before, after, category, context_before, context_after }) => ({
+    before, after, category, context_before, context_after,
+  }));
+  post({ action: "replace", text: finalText(), changes: accepted });
+}
+
+function copy() {
+  if (state.status === "ready") post({ action: "copy", text: finalText() });
+}
+
+// Events from Hammerspoon (begin) and from `penwise check --format jsonl` (the rest).
+window.penwise = {
+  receive(event) {
+    switch (event.type) {
+      case "begin":
+        Object.assign(state, {
+          status: "loading", original: event.original, mode: event.mode,
+          segments: [], changes: [], undone: new Set(), warnings: [], error: "", explaining: false,
+        });
+        break;
+      case "start":
+        state.model = event.model;
+        state.explain = Boolean(event.explain);
+        break;
+      case "result":
+        Object.assign(state, {
+          status: "ready", segments: event.segments, changes: event.changes, warnings: event.warnings,
+          explaining: state.explain && event.changes.length > 0,
+        });
+        break;
+      case "explanations":
+        for (const change of state.changes) {
+          if (event.reasons[change.id]) change.reason = event.reasons[change.id];
+        }
+        break;
+      case "done":
+        state.explaining = false;
+        break;
+      case "error":
+        Object.assign(state, { status: "error", error: event.message });
+        break;
+    }
+    render();
+  },
+};
+
+document.querySelectorAll(".modes button").forEach((button) => {
+  button.addEventListener("click", () => setMode(button.dataset.mode));
+});
+document.getElementById("cancel").addEventListener("click", () => post({ action: "cancel" }));
+document.getElementById("copy").addEventListener("click", copy);
+document.getElementById("replace").addEventListener("click", replace);
+
+document.addEventListener("keydown", (event) => {
+  const selection = String(window.getSelection());
+  if (event.key === "Enter") {
+    event.preventDefault();
+    replace();
+  } else if (event.key === "Escape") {
+    event.preventDefault();
+    post({ action: "cancel" });
+  } else if (event.key === "Tab") {
+    event.preventDefault();
+    setMode(state.mode === "fix" ? "improve" : "fix");
+  } else if (event.metaKey && event.key === "c" && !selection) {
+    event.preventDefault();
+    copy();
+  } else if (/^[1-9]$/.test(event.key) && !event.metaKey && state.status === "ready") {
+    const change = state.changes[Number(event.key) - 1];
+    if (change) toggle(change.id);
+  }
+});
+
+render();
+post({ action: "ready" });
+</script>
+</body>
+</html>
