@@ -132,7 +132,7 @@ def test_quick_fix_replaces_right_away(config):
     assert spoon.events == []  # no review panel
     assert "alert Penwise: fixing…" in spoon.log
     assert "cmd+v: Wait until the information arrive." in spoon.log
-    assert "alert Penwise: 2 fixes: Spelling, Uncountable noun" in spoon.log
+    assert "alert Penwise: 2 fixes: Spelling, Uncountable noun  (⌘Z to undo)" in spoon.log
     assert any("--no-explain" in line for line in spoon.log)
     spoon.run_tasks()  # the history update
     assert len((config / "history.jsonl").read_text().splitlines()) == 2
@@ -232,3 +232,14 @@ def test_the_menu_opens_setup_in_terminal(config):
     (script,) = [line for line in spoon.log if line.startswith("applescript")]
     assert 'tell application "Terminal"' in script
     assert script.rstrip().endswith('-m penwise setup"\nend tell')
+
+
+def test_an_error_offers_to_check_the_setup(isolated):
+    (isolated / "config.toml").write_text('base_url = "http://127.0.0.1:9/v1"\n')
+    spoon = Spoon("stream")
+    spoon.run('spoon:check("fix")')
+    spoon.message({"action": "ready"})
+    spoon.run_tasks()
+    assert spoon.events[-1]["type"] == "error"
+    spoon.message({"action": "doctor"})
+    assert any(line.startswith("applescript") and "doctor" in line for line in spoon.log)

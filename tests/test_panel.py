@@ -90,6 +90,8 @@ def test_explanations_and_errors_are_shown(page):
     send(page, {"type": "error", "message": "Could not reach the model."})
     assert "Could not reach the model." in page.locator("main").inner_text()
     assert page.locator("#replace").is_disabled()
+    page.get_by_role("button", name="Check my setup").click()
+    assert sent(page)[-1] == {"action": "doctor"}
 
 
 def test_text_is_never_interpreted_as_html(page):

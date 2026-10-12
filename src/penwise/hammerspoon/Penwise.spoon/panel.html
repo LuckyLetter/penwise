@@ -315,7 +315,12 @@ function render() {
     main.append(el("h2", {}, state.note.title), el("pre", { class: "note-text" }, state.note.text));
   } else if (state.status === "error") {
     main.append(el("div", { class: "error" }, state.error));
-    main.append(el("div", { class: "status muted" }, "Run `penwise doctor` in Terminal to see what's wrong."));
+    main.append(
+      el("div", { class: "status" },
+        el("button", { type: "button", class: "secondary", onclick: () => post({ action: "doctor" }) }, "Check my setup"),
+        el("span", { class: "muted" }, "  opens a diagnosis in Terminal"),
+      ),
+    );
   } else if (state.status === "ready") {
     for (const warning of state.warnings) main.append(el("div", { class: "banner" }, warning));
     main.append(renderText());

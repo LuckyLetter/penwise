@@ -219,7 +219,7 @@ function obj:quickFix()
         hs.alert.show("Penwise: looks good, nothing to fix")
       else
         self:_replace(event.edited, event.changes)
-        hs.alert.show("Penwise: " .. summarize(event.changes), 3)
+        hs.alert.show("Penwise: " .. summarize(event.changes) .. "  (⌘Z to undo)", 3)
       end
     end)
   end)
@@ -383,6 +383,9 @@ function obj:_onMessage(body)
     hs.alert.show("Copied")
   elseif body.action == "mode" then
     self:_review(self.text, body.mode)
+  elseif body.action == "doctor" then
+    self:_close(false)
+    self:_openInTerminal("doctor")
   elseif body.action == "cancel" then
     self:_close(true)
   end
