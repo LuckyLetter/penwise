@@ -116,6 +116,7 @@
   li .tag { font-size: 12px; color: var(--accent); white-space: nowrap; }
   li .note, li .why, li .seen { grid-column: 2 / 4; font-size: 13px; color: var(--muted); }
   li .why { color: var(--text); }
+  li .risk { grid-column: 2 / 4; font-size: 13px; color: var(--warn-text); }
   li .seen { font-size: 12px; }
 
   button.primary, button.secondary {
@@ -289,6 +290,8 @@ function renderChanges() {
         el("span", { class: "tag" }, change.label),
         el("span", { class: "note" }, change.note),
         change.reason && el("span", { class: "why" }, "Why: " + change.reason),
+        change.risk && state.undone.has(change.id) &&
+          el("span", { class: "risk" }, `Not applied: it would change ${change.risk}. Click to apply it.`),
         seen && el("span", { class: "seen" }, seen),
       ),
     );
@@ -378,6 +381,8 @@ window.penwise = {
         Object.assign(state, {
           status: "ready", segments: event.segments, changes: event.changes, warnings: event.warnings,
           explaining: state.explain && event.changes.length > 0, elapsedMs: event.elapsed_ms,
+          // Changes to numbers, citations, acronyms, math, code or links start out not applied.
+          undone: new Set(event.changes.filter((c) => c.risk).map((c) => c.id)),
         });
         if (!event.changes.length && !event.warnings.length) {
           autoClose = setTimeout(() => post({ action: "cancel" }), AUTO_CLOSE_MS);

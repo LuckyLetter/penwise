@@ -9,7 +9,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass, field
 
 from penwise import diff as textdiff
-from penwise import lessons, prompts
+from penwise import lessons, prompts, protect
 from penwise.diff import Change
 from penwise.llm import LLMError
 
@@ -55,7 +55,8 @@ class Result:
 
     @property
     def edited(self) -> str:
-        return textdiff.apply(self.segments, self.changes)
+        """The text with every change applied, except the ones that would alter a number, citation, etc."""
+        return textdiff.apply(self.segments, self.changes, {c.id for c in self.changes if not c.risk})
 
     def to_dict(self) -> dict:
         return {
@@ -213,6 +214,8 @@ def check(
             edited_chunks.append((piece, textdiff.apply(segments, changes), changes))
 
     lessons.annotate(result.changes)
+    for change in result.changes:
+        change.risk = protect.risk(change.before, change.after)
     if annotate_seen:
         annotate_seen(result.changes)
     result.elapsed_ms = int((time.monotonic() - started) * 1000)

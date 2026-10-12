@@ -141,3 +141,15 @@ def test_a_note_shows_plain_text(page):
     page.keyboard.press("Tab")
     page.keyboard.press("Enter")
     assert sent(page) == [{"action": "ready"}]  # no mode switch, nothing to replace
+
+
+def test_risky_changes_start_unapplied(page):
+    send(page, {"type": "begin", "original": "Shown in [12], it work.", "mode": "fix"})
+    send(page, check_result("Shown in [12], it work.", "Shown, it works."))
+    first = page.locator("li").first
+    assert "Not applied: it would change a citation" in first.inner_text()
+    page.keyboard.press("Enter")
+    assert sent(page)[-1]["text"] == "Shown in [12], it works."
+    first.click()  # apply it after all
+    page.keyboard.press("Enter")
+    assert sent(page)[-1]["text"] == "Shown, it works."

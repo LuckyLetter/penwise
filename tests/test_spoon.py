@@ -243,3 +243,14 @@ def test_an_error_offers_to_check_the_setup(isolated):
     assert spoon.events[-1]["type"] == "error"
     spoon.message({"action": "doctor"})
     assert any(line.startswith("applescript") and "doctor" in line for line in spoon.log)
+
+
+def test_quick_fix_leaves_risky_changes_for_review(config):
+    spoon = Spoon("stream")
+    spoon.lua.globals().FIELD = spoon.to_lua({"AXRole": "AXTextArea", "AXSelectedText": "Wait untill noon [3]."})
+    spoon.run("spoon:quickFix()")
+    spoon.run_tasks()
+    assert "cmd+v: Wait until noon [3]." in spoon.log
+    assert "alert Penwise: 1 fix: Spelling  (⌘Z to undo)  · 1 left for you to review (⌃⌥P)" in spoon.log
+    spoon.run_tasks()
+    assert len((config / "history.jsonl").read_text().splitlines()) == 1  # only the applied fix

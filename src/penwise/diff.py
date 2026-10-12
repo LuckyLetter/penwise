@@ -45,6 +45,7 @@ class Change:
     label: str = ""
     note: str = ""
     reason: str | None = None
+    risk: str | None = None  # what the change would alter (e.g. "a number"); such changes aren't applied by default
     context_before: str = ""
     context_after: str = ""
     seen: int = 0

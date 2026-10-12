@@ -28,6 +28,9 @@ def pretty(result: Result, color: bool) -> str:
             inline.append(seg)
             continue
         change = by_id[seg]
+        if change.risk:  # suggested only: the text keeps the original
+            inline.append(paint(change.before, YELLOW) if color else change.before)
+            continue
         if color:
             # Not every terminal shows strikethrough, so a replacement also gets an arrow.
             arrow = paint("→", DIM) if change.before.strip() and change.after.strip() else ""
@@ -55,6 +58,8 @@ def pretty(result: Result, color: bool) -> str:
             f"{n:>3}. {describe_change(change.before, change.after)}  {paint(change.label, CYAN)}{paint(seen, DIM)}"
         )
         lines.append(paint(f"     {change.note}", DIM))
+        if change.risk:
+            lines.append(paint(f"     Not applied: it would change {change.risk}. Check it yourself.", YELLOW))
         if change.reason:
             lines.append(f"     Why: {change.reason}")
     return "\n".join(lines)

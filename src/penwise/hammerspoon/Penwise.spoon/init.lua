@@ -215,11 +215,19 @@ function obj:quickFix()
       hs.alert.closeSpecific(notice)
       if event.type == "error" then
         hs.alert.show("Penwise: " .. event.message, 6)
-      elseif #event.changes == 0 then
-        hs.alert.show("Penwise: looks good, nothing to fix")
       else
-        self:_replace(event.edited, event.changes)
-        hs.alert.show("Penwise: " .. summarize(event.changes) .. "  (⌘Z to undo)", 3)
+        -- Changes to numbers, citations, acronyms, math, code or links are left out.
+        local applied, held = {}, 0
+        for _, change in ipairs(event.changes) do
+          if change.risk then held = held + 1 else table.insert(applied, change) end
+        end
+        local note = held > 0 and string.format("  · %d left for you to review (⌃⌥P)", held) or ""
+        if #applied == 0 then
+          hs.alert.show("Penwise: looks good, nothing to fix" .. note, 3)
+        else
+          self:_replace(event.edited, applied)
+          hs.alert.show("Penwise: " .. summarize(applied) .. "  (⌘Z to undo)" .. note, 3)
+        end
       end
     end)
   end)

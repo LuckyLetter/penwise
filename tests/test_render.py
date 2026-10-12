@@ -18,3 +18,9 @@ def test_plain_output_marks_changes_with_brackets():
 
 def test_no_changes():
     assert "your text looks good" in render.pretty(check("Fine.", "Fine."), color=False)
+
+
+def test_risky_changes_are_listed_but_not_applied():
+    out = render.pretty(check("As shown in [12], it works.", "As shown, it works."), color=False)
+    assert "As shown in [12], it works." in out
+    assert "Not applied: it would change a citation" in out

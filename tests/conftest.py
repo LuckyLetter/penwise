@@ -8,6 +8,7 @@ FIXES = {
     "have a error": "has an error",
     "untill": "until",
     "informations": "information",
+    " [3]": "",  # drops a citation, which Penwise must not apply on its own
 }
 
 
