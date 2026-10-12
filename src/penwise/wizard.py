@@ -52,10 +52,12 @@ def run() -> int:
             "\nAll set! Select text in any app, then press:\n"
             "  ⌃⌥P   review the fixes (Control+Option+P)\n"
             "  ⌃⌥⇧P  also improve clarity and flow\n"
-            "  ⌃⌥⌘P  quick fix: replace right away, no review"
+            "  ⌃⌥⌘P  quick fix: replace right away, no review\n"
+            "In a short text box you don't even need to select: Penwise takes the whole box."
         )
     else:
         print(f'\nAll set! Try it: penwise check "{TEST_SENTENCE}"')
+    print("Not sure how to say something? Write it in your own language or as [[your idea]]: Penwise fills it in.")
     return 0
 
 
