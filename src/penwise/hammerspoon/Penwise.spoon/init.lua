@@ -98,6 +98,10 @@ function obj:check(mode)
       hs.alert.show("Penwise: select some text first")
       return
     end
+    if #text > 100000 then
+      hs.alert.show("Penwise: the selection is too long (over 100,000 characters)")
+      return
+    end
     self:_showPanel()
     self:_start(text, mode)
   end)
@@ -174,7 +178,9 @@ function obj:_start(text, mode)
     end
   end
 
-  local args = concat(self.args, { "check", "--format", "jsonl", "--mode", mode })
+  -- The text goes in as an argument, not on stdin: hs.task writes stdin later, from the
+  -- event loop, so input given to a streaming task can be lost when stdin is closed.
+  local args = concat(self.args, { "check", "--format", "jsonl", "--mode", mode, "--", text })
   self.task = hs.task.new(self.bin, function(code, stdout, stderr)
     if run ~= self.run then return end
     if not finished and stdout and stdout ~= "" then
@@ -196,8 +202,6 @@ function obj:_start(text, mode)
   end, args)
 
   self.task:start()
-  self.task:setInput(text)
-  self.task:closeInput()
 end
 
 function obj:_send(json)

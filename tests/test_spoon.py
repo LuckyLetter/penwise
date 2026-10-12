@@ -56,6 +56,9 @@ class Spoon:
     def run(self, code):
         return self.lua.execute(code)
 
+    def run_tasks(self):
+        self.run("run_tasks()")
+
     def message(self, body):
         self.lua.globals().MESSAGE_BODY = self.to_lua(body)
         self.run("SEND_MESSAGE({ body = MESSAGE_BODY })")
@@ -84,12 +87,14 @@ def test_hotkey_check_and_replace(config, delivery):
     assert spoon.events == []  # held back until the panel has loaded
 
     spoon.message({"action": "ready"})
+    spoon.run_tasks()
     assert [e["type"] for e in spoon.events] == ["begin", "start", "result", "done"]
     result = spoon.events[2]
     assert result["edited"] == "Wait until the information arrive."
 
     changes = [{key: c[key] for key in ("before", "after", "category")} for c in result["changes"]]
     spoon.message({"action": "replace", "text": result["edited"], "changes": changes})
+    spoon.run_tasks()
     assert spoon.log[-4:] == [
         "hide panel",
         "focus target",
@@ -114,5 +119,6 @@ def test_errors_reach_the_panel(isolated):
     spoon = Spoon("stream")
     spoon.run('spoon:check("fix")')
     spoon.message({"action": "ready"})
+    spoon.run_tasks()
     assert spoon.events[-1]["type"] == "error"
     assert "Could not reach" in spoon.events[-1]["message"]

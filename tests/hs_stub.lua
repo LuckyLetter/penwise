@@ -19,31 +19,37 @@ function webview:hswindow() return { focus = function() end } end
 function webview:isVisible() return false end
 function webview:evaluateJavaScript(js) table.insert(JS, js) end
 
+-- Tasks run when the test calls run_tasks(), standing in for Hammerspoon's event loop.
+-- As in Hammerspoon, setInput() only queues the input: it is written from the event
+-- loop, so stdin closed with closeInput() before then loses it.
+TASKS = {}
+
 local function newTask(path, done, stream, args)
   if type(stream) == "table" then args, stream = stream, nil end
-  local task = {}
-  function task:start() return self end
+  local task = { path = path, done = done, stream = stream, args = args }
+  function task:start() table.insert(TASKS, self); return self end
   function task:isRunning() return false end
-  function task:setInput(input)
-    self.input = input
-    if not stream then self:closeInput() end
-    return self
-  end
-  function task:closeInput()
-    local out, err, code = run_command(path, args, self.input)
-    log("ran " .. table.concat(args, " "))
-    if stream and DELIVERY == "stream" then
+  function task:setInput(input) self.pending = input; return self end
+  function task:closeInput() self.closed = true; return self end
+  return task
+end
+
+function run_tasks()
+  while #TASKS > 0 do
+    local task = table.remove(TASKS, 1)
+    local input = (not task.closed and task.pending) or ""
+    local out, err, code = run_command(task.path, task.args, input)
+    log("ran " .. table.concat(task.args, " "))
+    if task.stream and DELIVERY == "stream" then
       -- Two chunks, split in the middle of a line, as a real pipe may do.
       local cut = math.floor(#out / 2)
-      stream(self, out:sub(1, cut), "")
-      stream(self, out:sub(cut + 1), "")
-      if done then done(code, "", err) end
-    elseif done then
-      done(code, out, err)
+      task.stream(task, out:sub(1, cut), "")
+      task.stream(task, out:sub(cut + 1), "")
+      if task.done then task.done(code, "", err) end
+    elseif task.done then
+      task.done(code, out, err)
     end
-    return self
   end
-  return task
 end
 
 hs = {

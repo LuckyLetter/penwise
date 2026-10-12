@@ -21,6 +21,13 @@ def test_check_text_format_prints_only_the_edit(server, isolated, monkeypatch, c
     assert out == "This has an error.\n"
 
 
+def test_text_after_double_dash_is_kept_exactly(server, isolated, monkeypatch, capsys):
+    text = "-starts with a dash\nand have a error  "
+    code, out, _ = run(["check", "--base-url", server.url, "-f", "text", "--", text], monkeypatch, capsys)
+    assert code == 0
+    assert out == "-starts with a dash\nand has an error  "
+
+
 def test_check_jsonl_streams_events(server, isolated, monkeypatch, capsys):
     code, out, _ = run(
         ["check", "This have a error.", "--base-url", server.url, "-f", "jsonl", "--explain"], monkeypatch, capsys
