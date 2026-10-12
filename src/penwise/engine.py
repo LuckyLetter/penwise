@@ -187,6 +187,7 @@ def check(
     max_chunk_chars: int = 1200,
     on_event: Emit | None = None,
     annotate_seen: Callable[[list[Change]], None] | None = None,
+    keep: list[str] | tuple[str, ...] = (),
 ) -> Result:
     """Check `text` and return the result. `chat(system, messages)` calls the model."""
     emit = on_event or (lambda event: None)
@@ -215,7 +216,7 @@ def check(
 
     lessons.annotate(result.changes)
     for change in result.changes:
-        change.risk = protect.risk(change.before, change.after)
+        change.risk = protect.risk(change.before, change.after, keep)
     if annotate_seen:
         annotate_seen(result.changes)
     result.elapsed_ms = int((time.monotonic() - started) * 1000)

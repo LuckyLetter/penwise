@@ -20,8 +20,15 @@ PROTECTED = [
 ]
 
 
-def risk(before: str, after: str) -> str | None:
-    """Return what a change would alter ("a number", ...), or None if it is safe to apply."""
+def risk(before: str, after: str, keep: list[str] | tuple[str, ...] = ()) -> str | None:
+    """Return what a change would alter ("a number", ...), or None if it is safe to apply.
+
+    `keep` lists words you never want changed (see `penwise keep`).
+    """
+    for word in keep:
+        pattern = re.compile(rf"(?<!\w){re.escape(word)}(?!\w)")
+        if len(pattern.findall(after)) < len(pattern.findall(before)):
+            return f"“{word}”, a word you keep"
     for kind, pattern in PROTECTED:
         kept = pattern.findall(after)
         for item in pattern.findall(before):

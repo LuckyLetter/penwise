@@ -254,3 +254,13 @@ def test_quick_fix_leaves_risky_changes_for_review(config):
     assert "alert Penwise: 1 fix: Spelling  (⌘Z to undo)  · 1 left for you to review (⌃⌥P)" in spoon.log
     spoon.run_tasks()
     assert len((config / "history.jsonl").read_text().splitlines()) == 1  # only the applied fix
+
+
+def test_keeping_a_word_saves_it(config):
+    spoon = Spoon("stream")
+    spoon.run('spoon:check("fix")')
+    spoon.message({"action": "ready"})
+    spoon.message({"action": "keep", "word": "Pytorch"})
+    spoon.run_tasks()
+    assert "ran -m penwise keep -- Pytorch" in spoon.log
+    assert 'keep = ["Pytorch"]' in (config / "config.toml").read_text()

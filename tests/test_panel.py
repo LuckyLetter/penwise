@@ -153,3 +153,20 @@ def test_risky_changes_start_unapplied(page):
     first.click()  # apply it after all
     page.keyboard.press("Enter")
     assert sent(page)[-1]["text"] == "Shown, it works."
+
+
+def test_always_keep_a_word(page):
+    send(page, {"type": "begin", "original": "We use Pytorch and a eror.", "mode": "fix"})
+    send(page, check_result("We use Pytorch and a eror.", "We use PyTorch and an error."))
+    first = page.locator("li").first
+    first.get_by_role("button", name="Always keep “Pytorch”").click()
+    assert sent(page)[-1] == {"action": "keep", "word": "Pytorch"}
+    assert "Kept: Penwise won't change “Pytorch” again." in first.inner_text()
+    page.keyboard.press("Enter")
+    assert sent(page)[-1]["text"] == "We use Pytorch and an error."
+
+
+def test_grammar_fixes_offer_no_keep_link(page):
+    send(page, {"type": "begin", "original": "They achieve it.", "mode": "fix"})
+    send(page, check_result("They achieve it.", "They achieved it."))
+    assert page.locator("li button").count() == 0

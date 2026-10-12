@@ -391,6 +391,9 @@ function obj:_onMessage(body)
     hs.alert.show("Copied")
   elseif body.action == "mode" then
     self:_review(self.text, body.mode)
+  elseif body.action == "keep" then
+    self.keepTask = hs.task.new(self.bin, nil, concat(self.args, { "keep", "--", body.word }))
+    self.keepTask:start()
   elseif body.action == "doctor" then
     self:_close(false)
     self:_openInTerminal("doctor")

@@ -117,6 +117,8 @@
   li .note, li .why, li .seen { grid-column: 2 / 4; font-size: 13px; color: var(--muted); }
   li .why { color: var(--text); }
   li .risk { grid-column: 2 / 4; font-size: 13px; color: var(--warn-text); }
+  li .keep { grid-column: 2 / 4; font-size: 12px; color: var(--muted); }
+  button.link { border: 0; background: none; padding: 0; font: inherit; color: var(--accent); cursor: pointer; }
   li .seen { font-size: 12px; }
 
   button.primary, button.secondary {
@@ -172,6 +174,7 @@ const state = {
   segments: [],
   changes: [],
   undone: new Set(),
+  kept: new Set(), // words you asked Penwise to always keep
   warnings: [],
   error: "",
   note: { title: "", text: "" },
@@ -225,6 +228,26 @@ function acceptedChanges() {
 function toggle(id) {
   if (state.undone.has(id)) state.undone.delete(id);
   else state.undone.add(id);
+  render();
+}
+
+// Offer "never change this" where the model may be "fixing" a name or a term: spelling
+// changes, or words with capitals or digits (Pytorch, ResNet50), of at most 3 words.
+const KEEPABLE = new Set(["spelling", "capitalization", "word-choice"]);
+
+function keepable(change) {
+  const word = change.before.trim();
+  return change.after.trim() && !change.risk && KEEPABLE.has(change.category) &&
+    (change.category === "spelling" || /[\p{Lu}\p{N}]/u.test(word)) &&
+    /^[\p{L}\p{N}][\p{L}\p{N}'’.\-]*(?: [\p{L}\p{N}'’.\-]+){0,2}$/u.test(word);
+}
+
+function keepWord(word) {
+  state.kept.add(word);
+  for (const change of state.changes) {
+    if (change.before.trim() === word) state.undone.add(change.id);
+  }
+  post({ action: "keep", word });
   render();
 }
 
@@ -292,6 +315,15 @@ function renderChanges() {
         change.reason && el("span", { class: "why" }, "Why: " + change.reason),
         change.risk && state.undone.has(change.id) &&
           el("span", { class: "risk" }, `Not applied: it would change ${change.risk}. Click to apply it.`),
+        state.kept.has(change.before.trim())
+          ? el("span", { class: "keep" }, `Kept: Penwise won't change “${change.before.trim()}” again.`)
+          : keepable(change) &&
+            el("span", { class: "keep" },
+              el("button", {
+                type: "button", class: "link",
+                onclick: (event) => { event.stopPropagation(); keepWord(change.before.trim()); },
+              }, `Always keep “${change.before.trim()}”`),
+            ),
         seen && el("span", { class: "seen" }, seen),
       ),
     );

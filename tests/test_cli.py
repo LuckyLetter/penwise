@@ -147,3 +147,16 @@ def test_first_run_points_to_setup(isolated, monkeypatch, capsys):
     monkeypatch.setattr("sys.stdin", Terminal())
     assert cli.main([]) == 0
     assert "Run `penwise setup` to get started" in capsys.readouterr().out
+
+
+def test_keep_words(server, isolated, monkeypatch, capsys):
+    _, out, _ = run(["keep"], monkeypatch, capsys)
+    assert "No words kept yet" in out
+    run(["keep", "Pytorch", "ResNet"], monkeypatch, capsys)
+    run(["keep", "Pytorch"], monkeypatch, capsys)  # no duplicates
+    assert config.load().keep == ["Pytorch", "ResNet"]
+    run(["keep", "--remove", "ResNet"], monkeypatch, capsys)
+    assert config.load().keep == ["Pytorch"]
+    server.reply = lambda body: "We use PyTorch."
+    _, out, _ = run(["check", "We use Pytorch.", "--base-url", server.url, "-f", "text"], monkeypatch, capsys)
+    assert out == "We use Pytorch."

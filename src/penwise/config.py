@@ -74,6 +74,9 @@ temperature = 0.2
 
 # Seconds to wait for the model before giving up.
 timeout = 60
+
+# Words Penwise should never change, like names and jargon. Add with `penwise keep <word>`.
+# keep = ["PyTorch", "ResNet"]
 """
 
 
@@ -95,6 +98,7 @@ class Config:
     timeout: float = 60
     reasoning_effort: str = ""
     max_chunk_chars: int = 1200
+    keep: list[str] = field(default_factory=list)
     path: Path | None = field(default=None, compare=False)
 
     def resolve_api_key(self) -> str:
@@ -166,7 +170,7 @@ def _parse(text: str, path: Path) -> Config:
     return cfg
 
 
-def parse_value(name: str, raw: str) -> bool | float | int | str:
+def parse_value(name: str, raw: str) -> bool | float | int | str | list[str]:
     """Turn a value typed on the command line into the setting's type."""
     if name not in SETTINGS:
         raise ConfigError(f"Unknown setting: {name}. Settings: {', '.join(SETTINGS)}")
@@ -191,6 +195,8 @@ def parse_value(name: str, raw: str) -> bool | float | int | str:
         except ValueError as exc:
             raise ConfigError(f"{name} should be a number") from exc
         return int(number) if number.is_integer() and isinstance(default, int) else number
+    if isinstance(default, list):
+        return [item.strip() for item in raw.split(",") if item.strip()]
     return raw
 
 
@@ -235,6 +241,8 @@ def write_config(values: dict, path: Path | None = None) -> Path:
 
 
 def _toml_value(value: object) -> str:
+    if isinstance(value, list):
+        return "[" + ", ".join(json.dumps(str(item), ensure_ascii=False) for item in value) + "]"
     if isinstance(value, bool):
         return "true" if value else "false"
     if isinstance(value, (int, float)):
@@ -244,6 +252,8 @@ def _toml_value(value: object) -> str:
 
 def _expected_type(default: object, value: object) -> str | None:
     """Describe the expected type if `value` doesn't match the type of `default`."""
+    if isinstance(default, list):
+        return None if isinstance(value, list) and all(isinstance(v, str) for v in value) else "a list of words"
     if isinstance(default, bool):
         return None if isinstance(value, bool) else "true or false"
     if isinstance(default, (int, float)):

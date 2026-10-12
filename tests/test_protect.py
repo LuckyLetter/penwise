@@ -31,3 +31,10 @@ def test_risky_changes_are_suggested_but_not_applied():
     assert [(c.before.strip(" ,"), c.risk) for c in result.changes] == [("in [12]", "a citation"), ("achieve", None)]
     assert result.edited == "As shown in [12], the model achieves 92% accuracy."
     assert result.to_dict()["changes"][0]["risk"] == "a citation"
+
+
+def test_words_you_keep_are_never_changed():
+    assert risk("Pytorch", "PyTorch", keep=["Pytorch"]) == "“Pytorch”, a word you keep"
+    assert risk("the Pytorch model", "the Pytorch models", keep=["Pytorch"]) is None
+    result = engine.check("We use Pytorch models.", lambda s, m: "We use PyTorch models.", keep=["Pytorch"])
+    assert result.edited == "We use Pytorch models."

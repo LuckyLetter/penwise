@@ -90,6 +90,13 @@ and Penwise takes the whole box. The panel shows a timer while it works, and clo
 needs no changes. To change the hotkeys, edit the Penwise block in `~/.hammerspoon/init.lua`; running
 `penwise setup` again keeps your changes.
 
+### Safe by default
+
+Changes that would alter a **number, citation, acronym, formula, code or link** are shown but not applied: the
+model can't check those, and small models sometimes drop a `[12]` or expand "LLMs". Click such a change to apply
+it anyway. If the model keeps "fixing" a name or a term (say, `Pytorch`), click **Always keep “Pytorch”** under the
+change, or run `penwise keep Pytorch`; `penwise keep` lists the words you keep.
+
 ### Not sure how to say it? Leave it to Penwise
 
 Write the part you're unsure about in your own language, or as a note in double brackets, and check as usual:
@@ -159,6 +166,7 @@ with every setting explained. All settings:
 | `temperature`     | `0.2`                       | lower is more predictable                                      |
 | `timeout`         | `60`                        | seconds to wait for the model                                  |
 | `reasoning_effort`| –                           | how long a cloud model "thinks" first (`none`, `low`, …); lower is faster |
+| `keep`            | `[]`                        | words Penwise never changes (`penwise keep <word>`)            |
 
 ## Learning from your changes
 

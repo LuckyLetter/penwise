@@ -79,6 +79,11 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("value", nargs="?")
     p.set_defaults(run=cmd_config)
 
+    p = sub.add_parser("keep", help="words Penwise should never change (names, jargon); list, add or remove")
+    p.add_argument("words", nargs="*", help="words to add (or remove, with --remove)")
+    p.add_argument("--remove", action="store_true", help="remove the words instead of adding them")
+    p.set_defaults(run=cmd_keep)
+
     p = sub.add_parser("insights", help="show the fixes you make most often")
     p.add_argument("-n", "--limit", type=int, default=8, help="how many items to show (default: 8)")
     p.set_defaults(run=cmd_insights)
@@ -139,6 +144,7 @@ def cmd_check(args: argparse.Namespace) -> int:
         max_chunk_chars=cfg.max_chunk_chars,
         on_event=emit,
         annotate_seen=history.mark_seen if cfg.history else None,
+        keep=cfg.keep,
     )
     emit({"type": "done"})
 
@@ -198,6 +204,24 @@ def cmd_config(args: argparse.Namespace) -> int:
     value = None if args.action == "unset" else config.parse_value(args.name, args.value)
     config.set_values({args.name: value})
     print(f"{args.name} {'reset to default' if value is None else f'= {args.value}'}")
+    return 0
+
+
+def cmd_keep(args: argparse.Namespace) -> int:
+    kept = config.load().keep
+    if not args.words:
+        if kept:
+            print("Penwise never changes these words:\n  " + "\n  ".join(kept))
+        else:
+            print("No words kept yet. Add some with: penwise keep PyTorch ResNet")
+        return 0
+    if args.remove:
+        kept = [word for word in kept if word not in args.words]
+    else:
+        kept = kept + [word for word in args.words if word not in kept]
+    config.set_values({"keep": kept or None})
+    action = "No longer keeping" if args.remove else "Keeping"
+    print(f"{action}: {', '.join(args.words)}")
     return 0
 
 
