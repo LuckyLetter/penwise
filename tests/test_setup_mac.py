@@ -59,3 +59,15 @@ def test_the_block_from_version_0_1_is_upgraded(tmp_path):
 def test_snippet_falls_back_to_python_module(monkeypatch):
     monkeypatch.setattr(setup_mac.shutil, "which", lambda name: None)
     assert 'spoon.Penwise.args = { "-m", "penwise" }' in setup_mac.snippet()
+
+
+def test_refresh_only_touches_an_installed_hotkey(tmp_path, monkeypatch):
+    restarted = []
+    monkeypatch.setattr(setup_mac, "hammerspoon_dir", lambda: tmp_path)
+    monkeypatch.setattr(setup_mac, "hammerspoon_installed", lambda: True)
+    monkeypatch.setattr(setup_mac, "restart_hammerspoon", lambda: restarted.append(True))
+    assert setup_mac.refresh() is False  # nothing installed yet: leave it alone
+    setup_mac.install_spoon()
+    assert setup_mac.refresh() is True
+    assert restarted == [True]
+    assert "spoon.Penwise:bindHotkeys" in (tmp_path / "init.lua").read_text()

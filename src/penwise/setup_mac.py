@@ -43,6 +43,10 @@ def hammerspoon_installed() -> bool:
     return any(path.exists() for path in APP_PATHS)
 
 
+def spoon_installed() -> bool:
+    return (hammerspoon_dir() / "Spoons" / SPOON_NAME).exists()
+
+
 def penwise_command() -> tuple[str, list[str]]:
     """How Hammerspoon should start Penwise: (executable, leading arguments)."""
     found = shutil.which("penwise")
@@ -90,6 +94,16 @@ def write_snippet(init_file: Path) -> str:
         init_file.parent.mkdir(parents=True, exist_ok=True)
         init_file.write_text(new, encoding="utf-8")
     return status
+
+
+def refresh() -> bool:
+    """Update an installed hotkey to this version of Penwise, without asking anything."""
+    if not (hammerspoon_installed() and spoon_installed()):
+        return False
+    install_spoon()
+    write_snippet(hammerspoon_dir() / "init.lua")
+    restart_hammerspoon()
+    return True
 
 
 def restart_hammerspoon() -> None:

@@ -9,7 +9,7 @@ import platform
 import sys
 import time
 
-from penwise import __version__, config, engine, history, presets, render, setup_mac, wizard
+from penwise import __version__, config, engine, history, presets, render, setup_mac, updater, wizard
 from penwise.config import ConfigError
 from penwise.lessons import LABELS
 from penwise.llm import ChatClient, LLMError
@@ -90,11 +90,15 @@ def build_parser() -> argparse.ArgumentParser:
     p = sub.add_parser("doctor", help="check your setup and test the model")
     p.set_defaults(run=cmd_doctor)
 
+    p = sub.add_parser("update", help="update Penwise to the latest version, hotkey included")
+    p.set_defaults(run=cmd_update)
+
     p = sub.add_parser("init", help="write a config file with every setting explained")
     p.add_argument("--force", action="store_true", help="overwrite an existing config file")
     p.set_defaults(run=cmd_init)
 
     p = sub.add_parser("setup-mac", help="install or update only the hotkey (part of `penwise setup`)")
+    p.add_argument("--refresh", action="store_true", help="only update an installed hotkey; ask nothing")
     p.set_defaults(run=cmd_setup_mac)
 
     p = sub.add_parser("record", help="save accepted changes (JSON on stdin); used by the Mac panel")
@@ -273,16 +277,24 @@ def cmd_doctor(args: argparse.Namespace) -> int:
 
     if platform.system() == "Darwin":
         has_app = setup_mac.hammerspoon_installed()
-        spoon = (setup_mac.hammerspoon_dir() / "Spoons" / setup_mac.SPOON_NAME).exists()
+        spoon = setup_mac.spoon_installed()
         line("Hotkey", "installed" if has_app and spoon else "not installed (run `penwise setup`)", has_app and spoon)
         ok = ok and has_app and spoon
     return 0 if ok else 1
+
+
+def cmd_update(args: argparse.Namespace) -> int:
+    return updater.run()
 
 
 def cmd_setup_mac(args: argparse.Namespace) -> int:
     if platform.system() != "Darwin":
         print("The hotkey is for macOS. On other systems, use `penwise check` in the terminal.")
         return 1
+    if args.refresh:
+        if setup_mac.refresh():
+            print("✓ Hotkey updated, and Hammerspoon restarted to load it.")
+        return 0
     return 0 if wizard.setup_hotkey() else 1
 
 
