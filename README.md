@@ -82,8 +82,24 @@ Three design rules keep it trustworthy:
 | Tab                 | switch between Fix and Improve    |
 | Esc                 | close without changing anything   |
 
-The panel shows a timer while it works, and closes by itself when your text needs no changes. To change the
-hotkeys, edit the Penwise block in `~/.hammerspoon/init.lua`; running `penwise setup` again keeps your changes.
+No need to select anything in a short text box (a message, a comment, up to 2,000 characters): press the hotkey
+and Penwise takes the whole box. The panel shows a timer while it works, and closes by itself when your text
+needs no changes. To change the hotkeys, edit the Penwise block in `~/.hammerspoon/init.lua`; running
+`penwise setup` again keeps your changes.
+
+### Not sure how to say it? Leave it to Penwise
+
+Write the part you're unsure about in your own language, or as a note in double brackets, and check as usual:
+
+```text
+In this paper, 我们提出 a new method for 图像分割.           →  In this paper, we propose a new method for image segmentation.
+The results [[show very clear]] that the model is robust.  →  The results clearly show that the model is robust.
+We [[want to say: did not have enough time]] to test more. →  We did not have enough time to test more.
+```
+
+Penwise notices these by itself (any non-Latin script, or `[[…]]`) and fills in the English. Each filled-in part
+appears as its own change, so you can learn the phrase, and undo it if the translation is off. Citations like
+`[12]` are left alone.
 
 **Updating:** `penwise update` gets the latest version and refreshes the hotkey.
 If something isn't working, `penwise doctor` checks each part and says what to do.
@@ -202,7 +218,8 @@ ruff check . && ruff format --check . && pytest
 
 The tests start a fake OpenAI-compatible server, so no model is needed. `tests/test_spoon.py` runs the Hammerspoon
 Spoon in an embedded Lua interpreter with stubbed `hs` APIs, and `tests/test_panel.py` drives the review panel in a
-headless browser.
+headless browser. On a macOS runner, CI also runs `tests/test_macos.py`: it stores a key in a real (temporary)
+Keychain, and drives the review panel and quick fix inside the real Hammerspoon app.
 
 ## License
 
