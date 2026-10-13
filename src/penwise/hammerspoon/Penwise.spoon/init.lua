@@ -9,7 +9,7 @@ local obj = {}
 obj.__index = obj
 
 obj.name = "Penwise"
-obj.version = "0.4.2"
+obj.version = "0.4.3"
 obj.author = "LuckyLetter"
 obj.homepage = "https://github.com/LuckyLetter/penwise"
 obj.license = "Apache-2.0 - https://opensource.org/licenses/Apache-2.0"
@@ -645,26 +645,30 @@ function obj:_showPanel()
           self:_close()
           self:_returnToApp()
         elseif action == "focusChange" then
+          -- These arrive a moment late, so a panel hidden and shown again at once can hear its
+          -- own "lost focus" after "got focus". Close only if it's still unfocused a bit later.
           self.panelFocused = hasFocus == true
-          if not hasFocus and self.webview:isVisible() then
-            self:_log("panel lost focus: closed")
-            self:_close() -- you clicked somewhere else: get out of the way
+          if not hasFocus then
+            local shown = self.shownCount
+            self.blurTimer = hs.timer.doAfter(0.2, function()
+              if not self.panelFocused and self.shownCount == shown and self.webview:isVisible() then
+                self:_log("panel lost focus: closed")
+                self:_close() -- you clicked somewhere else: get out of the way
+              end
+            end)
           end
         end
       end)
       :html(self.html)
   end
   self:_placePanel()
+  -- show() makes the panel the key window, and a nonactivating panel takes the keyboard without
+  -- bringing Hammerspoon forward: the app you're writing in stays active (so it keeps its text
+  -- box and selection), macOS doesn't switch away from a full-screen app, and no other
+  -- Hammerspoon window (like the console) can take the keyboard.
+  self.shownCount = (self.shownCount or 0) + 1
   self.webview:show()
-  if self.fullScreen then
-    -- Bringing Hammerspoon forward would switch to the desktop: the panel takes the keyboard as it is.
-    self:_log("panel shown over a full-screen app")
-  else
-    hs.focus()
-    local window = self.webview:hswindow()
-    if window then window:focus() end
-    self:_log("panel shown")
-  end
+  self:_log("panel shown%s", self.fullScreen and " over a full-screen app" or "")
 end
 
 -- Size the panel to fit its content, and put it next to the text being checked. It is as

@@ -42,7 +42,11 @@ function webview:evaluateJavaScript(js) table.insert(JS, js) end
 -- Tasks run when the test calls run_tasks(), standing in for Hammerspoon's event loop.
 -- Tasks get no stdin: Hammerspoon writes setInput() data later, from the event loop, and
 -- it can be lost (with closeInput()) or never end (without), so the Spoon must not use it.
-TASKS, TIMERS = {}, {}
+TASKS, TIMERS, DEFERRED = {}, {}, {}
+
+function run_deferred()
+  while #DEFERRED > 0 do table.remove(DEFERRED, 1)() end
+end
 
 local function newTask(path, done, stream, args)
   if type(stream) == "table" then args, stream = stream, nil end
@@ -181,7 +185,11 @@ hs = {
     end,
   },
   timer = {
-    doAfter = function(_, fn) fn(); return {} end,
+    -- One-off timers fire at once, or, with DEFER_AFTER, when the test calls run_deferred().
+    doAfter = function(_, fn)
+      if DEFER_AFTER then table.insert(DEFERRED, fn) else fn() end
+      return {}
+    end,
     -- Like Hammerspoon, repeating timers fire later, from the event loop (run_tasks).
     -- Long ones (like the daily update check) never fire in tests.
     doEvery = function(interval, fn)

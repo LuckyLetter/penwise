@@ -576,16 +576,31 @@ def test_a_text_box_counts_as_editable_whatever_the_app_says(config):
     assert spoon.events[0] == {"type": "begin", "original": "Wait untill noon.", "mode": "fix"}  # rich-text boxes
 
 
-def test_over_a_full_screen_app_the_panel_doesnt_bring_hammerspoon_forward(config):
+def test_the_panel_never_brings_hammerspoon_forward(config):
     spoon = Spoon("stream")
     spoon.lua.globals().FULL_SCREEN = True
     spoon.run('spoon:check("fix")')
     assert spoon.lua.globals().PANEL.style == 0 | 128  # borderless, nonactivating
-    assert "activate Hammerspoon" not in spoon.log  # that would switch to the desktop
-
     spoon.lua.globals().FULL_SCREEN = False
     spoon.run('spoon:check("fix")')
-    assert "activate Hammerspoon" in spoon.log
+    # That would switch away from a full-screen app, or let the Hammerspoon console take the keyboard.
+    assert "activate Hammerspoon" not in spoon.log
+
+
+def test_a_late_lost_focus_doesnt_close_a_panel_shown_again(config):
+    spoon = Spoon("stream")
+    spoon.run('spoon:check("fix")')
+    spoon.run('WINDOW_CALLBACK("focusChange", nil, true)')
+    spoon.run("DEFER_AFTER = true")
+    spoon.run('spoon:check("fix")')  # the hotkey again: hidden and shown at once
+    spoon.run('WINDOW_CALLBACK("focusChange", nil, false)')  # the old panel's "lost focus", late
+    spoon.run('WINDOW_CALLBACK("focusChange", nil, true)')  # the new panel's "got focus"
+    spoon.run("run_deferred()")
+    assert spoon.lua.globals().PANEL.visible
+
+    spoon.run('WINDOW_CALLBACK("focusChange", nil, false)')  # now you click elsewhere
+    spoon.run("run_deferred()")
+    assert not spoon.lua.globals().PANEL.visible
 
 
 def test_electron_apps_are_asked_to_show_their_text_and_read_right_away(config):
