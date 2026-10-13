@@ -123,6 +123,23 @@ def test_ollama_with_the_model_already_downloaded(isolated, answers, server, mon
     assert (cfg.base_url, cfg.model, cfg.explain) == (server.url, "gemma3:1b", False)
 
 
+def test_ollama_offers_the_models_you_already_have(isolated, answers, server, monkeypatch, capsys):
+    typed, _ = answers
+    ollama = dataclasses.replace(presets.OLLAMA, base_url=server.url)
+    monkeypatch.setattr(presets, "OLLAMA", ollama)
+    monkeypatch.setattr(presets, "PROVIDERS", (presets.OPENROUTER, ollama, presets.CUSTOM))
+    monkeypatch.setattr(wizard.platform, "system", lambda: "Linux")
+    monkeypatch.setattr(wizard.shutil, "which", lambda name: f"/usr/bin/{name}")
+    monkeypatch.setattr(wizard, "_ollama_running", lambda: True)
+    monkeypatch.setattr(wizard, "_ollama_models", lambda: {"llama3.2:1b", "qwen3:4b", "nomic-embed-text:latest"})
+    typed += ["2", ""]  # Ollama, and Return: the first installed model, no download needed
+    assert wizard.run() == 0
+    assert config.load().model == "llama3.2:1b"
+    out = capsys.readouterr().out
+    assert "qwen3:4b" in out and "(installed)" in out
+    assert "nomic-embed-text" not in out  # not a chat model
+
+
 def test_another_service_without_a_keychain_keeps_the_key_private(isolated, answers, server, monkeypatch):
     typed, secrets = answers
     monkeypatch.setattr(wizard.platform, "system", lambda: "Linux")

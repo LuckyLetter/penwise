@@ -141,8 +141,9 @@ def _ollama() -> dict | None:
             print("Ollama isn't running. Open the Ollama app (or run `ollama serve`), then run `penwise setup` again.")
             return None
 
-    model = _choose_model(presets.OLLAMA)
-    if model.id not in _ollama_models():
+    installed = _ollama_models()
+    model = _choose_model(presets.OLLAMA, installed)
+    if model.id not in installed:
         if not confirm(f"Download {model.id} now (about 1 GB)?"):
             print(f"Download it later with: ollama pull {model.id}")
             return None
@@ -159,10 +160,18 @@ def _custom() -> dict:
     return {"base_url": base_url, "model": model, **(_store_key(key) if key else {})}
 
 
-def _choose_model(provider: presets.Provider) -> presets.Model:
-    options = [(m, f"{m.id:<30} {m.blurb}") for m in provider.models]
+def _choose_model(provider: presets.Provider, installed: set[str] = frozenset()) -> presets.Model:
+    """Pick a suggested model, one already on this computer (`installed`), or type an id."""
+    suggested = {m.id for m in provider.models}
+    models = [
+        *provider.models,
+        *(presets.Model(name, "") for name in sorted(installed - suggested) if "embed" not in name),
+    ]
+    options = [(m, f"{m.id:<30} {m.blurb}{' (installed)' if m.id in installed else ''}".rstrip()) for m in models]
     options.append((None, "another model (type its id)"))
-    model = choose("\nWhich model?", options)
+    # Return picks the first model that needs no download.
+    default = next((n for n, m in enumerate(models, 1) if m.id in installed), 1)
+    model = choose("\nWhich model?", options, default)
     return model or presets.Model(ask("Model id:", required=True), "")
 
 
