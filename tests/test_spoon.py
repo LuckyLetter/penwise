@@ -758,3 +758,14 @@ def test_a_big_text_area_without_a_cursor_position_uses_the_mouse_pointer(config
     )
     spoon.run('spoon:check("fix")')
     assert panel_frame(spoon)["y"] == 500 - 14 - 8 - 240  # not the middle of the screen
+
+
+def test_when_the_app_moved_the_keyboard_penwise_clicks_back_in_the_box(config):
+    spoon = Spoon("stream")
+    g = spoon.lua.globals()
+    g.MOUSE = spoon.to_lua({"x": 10, "y": 10})
+    # Chrome's new tab page: back in the window, the keyboard is in the address bar.
+    address_bar = {"AXRole": "AXTextField", "AXValue": "https://www.google.com"}
+    check_whole_field(spoon, other_focus=address_bar, AXPosition={"x": 400, "y": 300}, AXSize={"w": 600, "h": 40})
+    assert spoon.log[-3:] == ["click 700,320", "cmd+a: user clipboard", "cmd+v: Wait until noon, please."]
+    assert (g.MOUSE.x, g.MOUSE.y) == (10, 10)  # the mouse pointer is put back

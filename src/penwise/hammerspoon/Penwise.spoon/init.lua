@@ -9,7 +9,7 @@ local obj = {}
 obj.__index = obj
 
 obj.name = "Penwise"
-obj.version = "0.4.5"
+obj.version = "0.4.6"
 obj.author = "LuckyLetter"
 obj.homepage = "https://github.com/LuckyLetter/penwise"
 obj.license = "Apache-2.0 - https://opensource.org/licenses/Apache-2.0"
@@ -912,9 +912,6 @@ function obj:_pasteOver(text)
     self:_log("pasted the fix over your selection")
     return paste(text, self)
   end
-  pcall(function()
-    if attribute(element, "AXFocused") == false then element:setAttributeValue("AXFocused", true) end
-  end)
   local function selectRange(range)
     if type(range) == "table" then pcall(function() element:setAttributeValue("AXSelectedTextRange", range) end) end
   end
@@ -934,16 +931,40 @@ function obj:_pasteOver(text)
     if not way then return self:_copyInstead(text) end
     way[2]()
     self:_whenSelected(element, way[3] or 0.6, function(selected)
-      if not selected and way[4] and not self:_keyboardElsewhere() then
-        self:_log("⌘A not confirmed by the app; the keyboard is still in the text box")
-        selected = true
+      if not selected and way[4] then
+        local elsewhere, where = self:_keyboardElsewhere()
+        self:_log("⌘A not confirmed by the app; the keyboard is in %s", where)
+        selected = not elsewhere
       end
       if not selected then return try(n + 1) end
       self:_log("selected the text (%s), pasted the fix", way[1])
       paste(text, self)
     end)
   end
-  self:_whenKeysReleased(function() try(1) end)
+  self:_whenKeysReleased(function()
+    self:_focusBox(element, function() try(1) end)
+  end)
+end
+
+-- Give the keyboard back to the text box Penwise read. Through Accessibility first; if the app
+-- put it somewhere else (Chrome's new tab page hands it to the address bar), click in the box,
+-- as you would, and put the mouse pointer back.
+function obj:_focusBox(element, done)
+  pcall(function() element:setAttributeValue("AXFocused", true) end)
+  self.focusTimer = hs.timer.doAfter(0.1, function()
+    local elsewhere, where = self:_keyboardElsewhere()
+    if not elsewhere then return done() end
+    local box = frameOf(element)
+    if not box then
+      self:_log("the keyboard is in %s, and the text box's place is unknown", where)
+      return done()
+    end
+    self:_log("the keyboard is in %s: clicking in the text box", where)
+    local pointer = hs.mouse.absolutePosition()
+    hs.eventtap.leftClick({ x = box.x + box.w / 2, y = box.y + box.h / 2 })
+    if pointer then hs.mouse.absolutePosition(pointer) end
+    self.focusTimer = hs.timer.doAfter(0.15, done)
+  end)
 end
 
 -- Call done(true) once the app shows the checked text as selected, or done(false) after
@@ -963,11 +984,14 @@ function obj:_whenSelected(element, seconds, done)
 end
 
 -- Whether the keyboard is in a different text box (one that doesn't hold the checked text).
+-- Also says where the keyboard is, for the log.
 function obj:_keyboardElsewhere()
   local focused = attribute(hs.axuielement.systemWideElement(), "AXFocusedUIElement")
-  local value = focused and attribute(focused, "AXValue")
-  return focused ~= nil and TEXT_FIELD_ROLES[attribute(focused, "AXRole")] == true
-    and type(value) == "string" and not sameText(value, self.text)
+  if not focused then return false, "nothing the app reports" end
+  local role, value = attribute(focused, "AXRole"), attribute(focused, "AXValue")
+  local elsewhere = TEXT_FIELD_ROLES[role] == true and type(value) == "string" and not sameText(value, self.text)
+  local holds = type(value) == "string" and string.format(" holding %d characters", #value) or ""
+  return elsewhere, (elsewhere and "another " or "") .. tostring(role) .. holds
 end
 
 -- After a select-all for reading, put the cursor back at the end, so typing doesn't replace it all.

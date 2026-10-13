@@ -183,6 +183,11 @@ hs = {
         if FIELD.SELECTION_LAG then FIELD.PENDING_SELECTION = FIELD.AXValue else FIELD.AXSelectedText = FIELD.AXValue end
       end
     end,
+    -- A click in a text box gives it the keyboard back.
+    leftClick = function(point)
+      log(string.format("click %d,%d", point.x, point.y))
+      OTHER_FOCUS = nil
+    end,
     checkKeyboardModifiers = function()
       KEY_CHECKS = (KEY_CHECKS or 0) + 1
       if (HELD_KEYS or 0) > 0 then
@@ -227,6 +232,11 @@ hs = {
       return menu
     end,
   },
-  mouse = { absolutePosition = function() return MOUSE end },
+  mouse = {
+    absolutePosition = function(point)
+      if point then MOUSE = point end
+      return MOUSE
+    end,
+  },
   osascript = { applescript = function(script) log("applescript " .. script); return true end },
 }
