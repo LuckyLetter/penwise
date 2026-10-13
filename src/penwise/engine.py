@@ -188,6 +188,7 @@ def check(
     on_event: Emit | None = None,
     annotate_seen: Callable[[list[Change]], None] | None = None,
     keep: list[str] | tuple[str, ...] = (),
+    style: str = "",
 ) -> Result:
     """Check `text` and return the result. `chat(system, messages)` calls the model."""
     emit = on_event or (lambda event: None)
@@ -196,7 +197,7 @@ def check(
     edited_chunks: list[tuple[str, str, list[Change]]] = []  # (original, edited, changes) per chunk
 
     pieces = split(text, max_chunk_chars)
-    edits = iter(_parallel([lambda p=piece: _edit(chat, p, mode) for piece, editable in pieces if editable]))
+    edits = iter(_parallel([lambda p=piece: _edit(chat, p, mode, style) for piece, editable in pieces if editable]))
     for piece, editable in pieces:
         if not editable:
             _append(result.segments, piece)
@@ -239,10 +240,10 @@ def check(
     return result
 
 
-def _edit(chat: Chat, piece: str, mode: str) -> tuple[str, str | None]:
+def _edit(chat: Chat, piece: str, mode: str, style: str = "") -> tuple[str, str | None]:
     """Ask the model to edit one piece. Returns (edited text, why it was rejected or None)."""
     fill = needs_fill(piece)
-    system, messages = prompts.edit_messages(piece, mode, fill=fill)
+    system, messages = prompts.edit_messages(piece, mode, fill=fill, style=style)
     edited = clean(chat(system, messages), piece)
     problem = sanity_check(piece, edited, mode, fill=fill)
     return (piece, problem) if problem else (edited, None)

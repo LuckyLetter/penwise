@@ -145,6 +145,7 @@
     <button type="button" data-mode="fix" title="Only fix errors (Tab to switch)">Fix</button>
     <button type="button" data-mode="improve" title="Also improve clarity and flow (Tab to switch)">Improve</button>
   </div>
+  <span class="muted" id="style"></span>
   <span class="spacer"></span>
   <span class="muted" id="model"></span>
 </header>
@@ -185,6 +186,7 @@ const state = {
   note: { title: "", text: "" },
   insights: null,
   explain: false,
+  style: "academic",
   explaining: false,
   startedAt: 0,
   elapsedMs: 0,
@@ -378,6 +380,8 @@ function render() {
   const took = state.status === "ready" && state.elapsedMs ? ` · ${(state.elapsedMs / 1000).toFixed(1)}s` : "";
   // "mistralai/mistral-small-2603" → "mistral-small-2603"
   document.getElementById("model").textContent = state.model.split("/").pop() + took;
+  const toneLabels = { email: "for an email", chat: "for a chat message" };
+  document.getElementById("style").textContent = (state.mode === "improve" && toneLabels[state.style]) || "";
 
   const main = document.getElementById("main");
   main.className = state.status;
@@ -453,6 +457,7 @@ window.penwise = {
         break;
       case "start":
         state.model = event.model;
+        state.style = event.style || "academic";
         state.explain = Boolean(event.explain);
         break;
       case "result":

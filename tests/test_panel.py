@@ -198,3 +198,11 @@ def test_insights_view(page):
 def test_insights_without_history(page):
     send(page, {"type": "insights", "total": 0, "since": "", "categories": [], "repeated": []})
     assert "No history yet" in page.locator("main").inner_text()
+
+
+def test_the_tone_is_shown_for_improve(page):
+    send(page, {"type": "begin", "original": "Hi.", "mode": "improve"})
+    send(page, {"type": "start", "model": "m", "explain": False, "style": "email"})
+    assert page.locator("#style").inner_text() == "for an email"
+    send(page, {"type": "begin", "original": "Hi.", "mode": "fix"})
+    assert page.locator("#style").inner_text() == ""

@@ -87,11 +87,20 @@ FILL_EXAMPLES = [
 ]
 
 
-def edit_messages(text: str, mode: str, fill: bool = False) -> tuple[str, list[dict]]:
+# In "improve" mode, a line about where the text is going (see presets.style_for).
+STYLE_HINTS = {
+    "email": "The text is an email: make it polite, clear and professional, and keep its greeting and sign-off.",
+    "chat": "The text is a chat message: keep it friendly, short and natural. Do not make it formal.",
+}
+
+
+def edit_messages(text: str, mode: str, fill: bool = False, style: str = "") -> tuple[str, list[dict]]:
     """Build the system prompt and chat messages that ask for an edited text."""
     system, instruction, examples = (
         (FILL_SYSTEM, FILL_INSTRUCTION, FILL_EXAMPLES) if fill else (SYSTEM[mode], INSTRUCTION[mode], EXAMPLES[mode])
     )
+    if mode == "improve" and style in STYLE_HINTS:
+        system += "\n" + STYLE_HINTS[style]
     messages: list[dict] = []
     for source, target in examples:
         messages.append({"role": "user", "content": f"{instruction}\n{source}"})

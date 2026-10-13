@@ -64,6 +64,9 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument(
         "--explain", action=argparse.BooleanOptionalAction, default=None, help="ask the model why for each change"
     )
+    p.add_argument("--style", choices=presets.STYLES, help="tone for improve mode (default: guessed from --app)")
+    p.add_argument("--app", default="", help="bundle id of the app the text comes from (set by the Mac panel)")
+    p.add_argument("--window", default="", help="title of the window the text comes from (set by the Mac panel)")
     p.add_argument("--model", help="override the model from the config")
     p.add_argument("--base-url", help="override the API base URL from the config")
     p.set_defaults(run=cmd_check)
@@ -136,7 +139,8 @@ def cmd_check(args: argparse.Namespace) -> int:
         if fmt == "jsonl":
             print(json.dumps(event), flush=True)
 
-    emit({"type": "start", "mode": mode, "model": cfg.model, "explain": explain})
+    style = args.style or presets.style_for(args.app, args.window)
+    emit({"type": "start", "mode": mode, "model": cfg.model, "explain": explain, "style": style})
     client = ChatClient.from_config(cfg)
     result = engine.check(
         text,
@@ -148,6 +152,7 @@ def cmd_check(args: argparse.Namespace) -> int:
         on_event=emit,
         annotate_seen=history.mark_seen if cfg.history else None,
         keep=cfg.keep,
+        style=style,
     )
     emit({"type": "done"})
 

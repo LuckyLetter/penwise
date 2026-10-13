@@ -274,6 +274,12 @@ function obj:_withSelection(callback)
     return
   end
   self.target = hs.window.focusedWindow()
+  local app = hs.application.frontmostApplication()
+  -- Where the text is going (an email, a chat) sets the tone of "improve".
+  self.context = {
+    "--app", (app and app:bundleID()) or "",
+    "--window", (self.target and self.target:title()) or "",
+  }
   self:_readSelection(function(text)
     if not text or not text:find("%S") then
       hs.alert.show("Penwise: select some text first")
@@ -379,6 +385,7 @@ function obj:_run(text, mode, extraArgs, onEvent)
   -- The text goes in as an argument, not on stdin: hs.task writes stdin later, from the
   -- event loop, so input given to a streaming task can be lost when stdin is closed.
   local args = concat(self.args, concat({ "check", "--format", "jsonl", "--mode", mode }, extraArgs))
+  args = concat(args, self.context or {})
   args = concat(args, { "--", text })
   self.task = hs.task.new(self.bin, function(code, stdout, stderr)
     if run ~= self.run then return end

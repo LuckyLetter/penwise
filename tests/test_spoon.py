@@ -280,3 +280,14 @@ def test_the_menu_offers_an_update_when_there_is_one(config, tmp_path):
     assert menu_items(spoon)[0]["title"] == "Update Penwise (2 new changes)…"
     click(spoon, "Update Penwise")
     assert any(line.startswith("applescript") and "update" in line for line in spoon.log)
+
+
+def test_the_app_sets_the_tone(config):
+    spoon = Spoon("stream")
+    g = spoon.lua.globals()
+    g.APP_ID, g.WINDOW_TITLE = "com.google.Chrome", "Inbox - Gmail"
+    spoon.run('spoon:check("improve")')
+    spoon.message({"action": "ready"})
+    spoon.run_tasks()
+    assert any("--app com.google.Chrome --window Inbox - Gmail" in line for line in spoon.log)
+    assert spoon.events[1]["style"] == "email"

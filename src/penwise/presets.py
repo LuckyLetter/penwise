@@ -81,3 +81,52 @@ def reasoning_effort_for(model_id: str) -> str:
 
 def provider_for(base_url: str) -> Provider | None:
     return next((p for p in PROVIDERS if p.base_url and p.base_url == base_url.rstrip("/")), None)
+
+
+# Where the text is going decides the tone of "improve": an email, a chat message, or
+# (by default) research writing. Apps are known by their bundle id; in a browser, by
+# the window title.
+EMAIL_APPS = {
+    "com.apple.mail",
+    "com.microsoft.Outlook",
+    "com.readdle.SparkDesktop",
+    "com.readdle.smartemail-Mac",
+    "com.superhuman.electron",
+}
+CHAT_APPS = {
+    "com.tinyspeck.slackmacgap",
+    "com.microsoft.teams",
+    "com.microsoft.teams2",
+    "com.apple.MobileSMS",
+    "ru.keepcoder.Telegram",
+    "com.hnc.Discord",
+    "net.whatsapp.WhatsApp",
+    "desktop.WhatsApp",
+    "com.tencent.xinWeChat",
+}
+BROWSERS = {
+    "com.apple.Safari",
+    "com.google.Chrome",
+    "org.mozilla.firefox",
+    "com.microsoft.edgemac",
+    "company.thebrowser.Browser",
+    "com.brave.Browser",
+}
+EMAIL_TITLES = ("gmail", "outlook", "proton mail", "fastmail", "yahoo mail")
+CHAT_TITLES = ("slack", "microsoft teams", "whatsapp", "messenger", "discord", "telegram", "wechat")
+STYLES = ("academic", "email", "chat")
+
+
+def style_for(app: str = "", window_title: str = "") -> str:
+    """Guess the kind of writing from the app (bundle id) and, for browsers, the window title."""
+    if app in EMAIL_APPS:
+        return "email"
+    if app in CHAT_APPS:
+        return "chat"
+    if app in BROWSERS:
+        title = window_title.lower()
+        if any(name in title for name in EMAIL_TITLES):
+            return "email"
+        if any(name in title for name in CHAT_TITLES):
+            return "chat"
+    return "academic"

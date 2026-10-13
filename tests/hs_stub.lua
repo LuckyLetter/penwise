@@ -8,7 +8,11 @@ CLIPBOARD, COUNT = "user clipboard", 1
 local function log(message) table.insert(LOG, message) end
 
 local screen = { frame = function() return { x = 0, y = 0, w = 1440, h = 900 } end }
-TARGET = { focus = function() log("focus target") end, screen = function() return screen end }
+TARGET = {
+  focus = function() log("focus target") end,
+  screen = function() return screen end,
+  title = function() return WINDOW_TITLE or "Draft" end,
+}
 
 local webview = {}
 for _, name in ipairs({ "windowStyle", "windowTitle", "allowTextEntry", "level", "windowCallback", "html", "show", "topLeft" }) do
@@ -74,6 +78,11 @@ hs = {
   },
   json = { encode = json_encode, decode = json_decode },
   window = { focusedWindow = function() return TARGET end },
+  application = {
+    frontmostApplication = function()
+      return { bundleID = function() return APP_ID or "com.apple.TextEdit" end }
+    end,
+  },
   screen = { mainScreen = function() return screen end },
   axuielement = {
     systemWideElement = function()

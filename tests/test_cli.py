@@ -179,3 +179,12 @@ def test_insights_as_json(isolated, monkeypatch, capsys):
     assert data["categories"][0]["label"] == "Prepositions"
     assert "learn them in phrases" in data["categories"][0]["note"]
     assert data["repeated"][0]["pair"] == "in → on"
+
+
+def test_improve_takes_its_tone_from_the_app(server, isolated, monkeypatch, capsys):
+    args = ["check", "Hi, can you check this?", "--base-url", server.url, "-f", "jsonl", "-m", "improve"]
+    _, out, _ = run([*args, "--app", "com.apple.mail"], monkeypatch, capsys)
+    assert json.loads(out.splitlines()[0])["style"] == "email"
+    assert "The text is an email" in server.requests[-1]["messages"][0]["content"]
+    _, out, _ = run([*args, "--style", "chat"], monkeypatch, capsys)
+    assert json.loads(out.splitlines()[0])["style"] == "chat"
