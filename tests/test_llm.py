@@ -1,5 +1,6 @@
 import pytest
 
+from penwise import llm
 from penwise.llm import ChatClient, LLMError
 
 
@@ -37,6 +38,23 @@ def test_other_bad_requests_are_not_retried(server):
     with pytest.raises(LLMError, match="context length exceeded"):
         ChatClient(server.url, "m").chat("s", [])
     assert len(server.requests) == 1
+
+
+def test_a_busy_server_is_asked_once_more(server, monkeypatch):
+    monkeypatch.setattr(llm, "RETRY_DELAY", 0)
+
+    def reply(body):
+        if len(server.requests) == 1:
+            raise server.Reject(503, "overloaded")
+        return "Fixed."
+
+    server.reply = reply
+    assert ChatClient(server.url, "m").chat("s", []) == "Fixed."
+
+    server.status, server.requests = 429, []
+    with pytest.raises(LLMError, match="Rate limited"):
+        ChatClient(server.url, "m").chat("s", [])
+    assert len(server.requests) == 2  # one retry, then the error
 
 
 def test_missing_model_suggests_a_fix(server):

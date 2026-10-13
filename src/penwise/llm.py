@@ -9,6 +9,7 @@ from __future__ import annotations
 import json
 import socket
 import ssl
+import time
 import urllib.error
 import urllib.request
 
@@ -25,6 +26,10 @@ class LLMError(Exception):
 # Settings some models refuse (e.g. reasoning models that only take their default
 # temperature). When a model rejects one, the request is sent again without it.
 OPTIONAL_SETTINGS = ("temperature", "reasoning")
+
+# A busy or briefly failing server usually answers the second time.
+RETRY_STATUSES = (429, 500, 502, 503, 504)
+RETRY_DELAY = 1.0
 
 
 class ChatClient:
@@ -66,10 +71,15 @@ class ChatClient:
         return content or ""
 
     def _post_without_rejected(self, body: dict) -> dict:
+        retried = False
         while True:
             try:
                 return self._post("/chat/completions", body)
             except LLMError as exc:
+                if exc.status in RETRY_STATUSES and not retried:
+                    retried = True
+                    time.sleep(RETRY_DELAY)
+                    continue
                 rejected = [key for key in OPTIONAL_SETTINGS if key in body and key in str(exc)]
                 if exc.status != 400 or not rejected:
                     raise
