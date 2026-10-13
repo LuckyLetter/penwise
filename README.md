@@ -30,10 +30,10 @@ Setup is one command that asks a few questions and does the rest.
 ## How it works
 
 ```
- Any Mac app (text selected)
+ Any Mac app (a text box, a selection, or the paragraph at the cursor)
         │  ⌃⌥P fix  ·  ⌃⌥⇧P improve  ·  ⌃⌥⌘P quick fix
         ▼
- Hammerspoon Spoon (Lua)          reads the selection, shows the review panel, pastes the result
+ Hammerspoon Spoon (Lua)          reads the text, shows the review panel at it, pastes the result
         │  text as an argument → JSON lines
         ▼
  penwise (Python)
