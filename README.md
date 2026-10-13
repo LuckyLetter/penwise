@@ -111,7 +111,9 @@ Penwise notices these by itself (any non-Latin script, or `[[…]]`) and fills i
 appears as its own change, so you can learn the phrase, and undo it if the translation is off. Citations like
 `[12]` are left alone.
 
-**Updating:** `penwise update` gets the latest version and refreshes the hotkey.
+**Updating:** `penwise update` gets the latest version and refreshes the hotkey. You don't need to remember to
+check: once a day Penwise looks for a new version, and when there is one the menu bar icon shows a dot (✎•)
+and its menu offers *Update Penwise*.
 If something isn't working, `penwise doctor` checks each part and says what to do.
 
 ## Choosing a model

@@ -100,10 +100,11 @@ hs = {
   timer = {
     doAfter = function(_, fn) fn(); return {} end,
     -- Like Hammerspoon, repeating timers fire later, from the event loop (run_tasks).
-    doEvery = function(_, fn)
+    -- Long ones (like the daily update check) never fire in tests.
+    doEvery = function(interval, fn)
       local timer = { fn = fn, running = true }
       function timer:stop() self.running = false end
-      table.insert(TIMERS, timer)
+      if interval < 60 then table.insert(TIMERS, timer) end
       return timer
     end,
     secondsSinceEpoch = function() CLOCK = (CLOCK or 0) + 0.1; return CLOCK end,

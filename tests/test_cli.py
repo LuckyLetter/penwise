@@ -160,3 +160,12 @@ def test_keep_words(server, isolated, monkeypatch, capsys):
     server.reply = lambda body: "We use PyTorch."
     _, out, _ = run(["check", "We use Pytorch.", "--base-url", server.url, "-f", "text"], monkeypatch, capsys)
     assert out == "We use Pytorch."
+
+
+def test_update_check(isolated, monkeypatch, capsys):
+    monkeypatch.setattr(cli.updater, "check", lambda: "2 new changes")
+    _, out, _ = run(["update", "--check", "--json"], monkeypatch, capsys)
+    assert json.loads(out) == {"available": True, "detail": "2 new changes"}
+    monkeypatch.setattr(cli.updater, "check", lambda: None)
+    _, out, _ = run(["update", "--check"], monkeypatch, capsys)
+    assert "up to date" in out

@@ -32,6 +32,7 @@ class Spoon:
         spoon = self.lua.eval('dofile(SPOON_DIR .. "init.lua")')
         spoon.bin = sys.executable
         spoon.args = self.to_lua(["-m", "penwise"])
+        spoon.checkForUpdates = False  # tests don't look for updates online
         g.spoon = spoon.init(spoon)
 
     def run_command(self, path, args, stdin):
@@ -264,3 +265,18 @@ def test_keeping_a_word_saves_it(config):
     spoon.run_tasks()
     assert "ran -m penwise keep -- Pytorch" in spoon.log
     assert 'keep = ["Pytorch"]' in (config / "config.toml").read_text()
+
+
+def test_the_menu_offers_an_update_when_there_is_one(config, tmp_path):
+    fake = tmp_path / "penwise"
+    fake.write_text('#!/bin/sh\necho \'{"available": true, "detail": "2 new changes"}\'\n')
+    fake.chmod(0o755)
+    spoon = Spoon("stream")
+    spoon.lua.globals().spoon.bin = str(fake)
+    spoon.lua.globals().spoon.args = spoon.to_lua([])
+    spoon.run("spoon.checkForUpdates = true; spoon:start()")
+    spoon.run_tasks()
+    assert spoon.lua.globals().MENU_TITLE == "✎•"
+    assert menu_items(spoon)[0]["title"] == "Update Penwise (2 new changes)…"
+    click(spoon, "Update Penwise")
+    assert any(line.startswith("applescript") and "update" in line for line in spoon.log)

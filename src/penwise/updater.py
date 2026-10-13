@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import importlib.metadata
 import json
+import os
 import platform
 import shutil
 import subprocess
@@ -15,21 +16,55 @@ from pathlib import Path
 from penwise import setup_mac
 
 
-def install_source() -> tuple[str, str]:
-    """Where Penwise was installed from: ("directory", path), ("git", url) or ("other", "")."""
+def _direct_url() -> dict:
+    """The install record pip and uv keep (PEP 610), or {} if there is none."""
     try:
         text = importlib.metadata.distribution("penwise").read_text("direct_url.json")
     except importlib.metadata.PackageNotFoundError:
         text = None
-    if not text:
+    return json.loads(text) if text else {}
+
+
+def install_source() -> tuple[str, str]:
+    """Where Penwise was installed from: ("directory", path), ("git", url) or ("other", "")."""
+    info = _direct_url()
+    if not info:
         return "other", ""
-    info = json.loads(text)
     url = info.get("url", "")
     if "vcs_info" in info:
         return "git", url
     if url.startswith("file://"):
         return "directory", urllib.request.url2pathname(urllib.parse.urlparse(url).path)
     return "other", url
+
+
+def check() -> str | None:
+    """Look for a newer version without installing it. Returns e.g. "3 new changes", or None."""
+    kind, where = install_source()
+    if kind == "directory" and (Path(where) / ".git").exists():
+        git = ["git", "-C", where]
+        if _quiet([*git, "fetch", "--quiet"]) is None:
+            return None
+        count = _quiet([*git, "rev-list", "--count", "HEAD..@{u}"]) or "0"
+        if count.isdigit() and int(count) > 0:
+            return f"{count} new change{'s' if int(count) > 1 else ''}"
+    elif kind == "git":
+        vcs = _direct_url().get("vcs_info", {})
+        remote = _quiet(["git", "ls-remote", where, vcs.get("requested_revision") or "HEAD"]) or ""
+        latest = remote.split()[0] if remote else ""
+        if latest and latest != vcs.get("commit_id"):
+            return "a new version"
+    return None
+
+
+def _quiet(command: list[str]) -> str | None:
+    """Run a command without asking anything; return its output, or None if it failed."""
+    env = {**os.environ, "GIT_TERMINAL_PROMPT": "0"}
+    try:
+        out = subprocess.run(command, capture_output=True, text=True, timeout=30, env=env)
+    except (OSError, subprocess.TimeoutExpired):
+        return None
+    return out.stdout.strip() if out.returncode == 0 else None
 
 
 def installed_with_uv() -> bool:

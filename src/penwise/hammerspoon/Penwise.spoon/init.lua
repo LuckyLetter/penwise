@@ -35,6 +35,11 @@ obj.wholeFieldLimit = 2000
 --- Show the Penwise icon in the menu bar (when `start()` is called).
 obj.showMenu = true
 
+--- Penwise.checkForUpdates
+--- Variable
+--- Look for a new version once a day; when there is one, the menu offers to update.
+obj.checkForUpdates = true
+
 obj.logger = hs.logger.new("Penwise")
 
 local spoonPath = hs.spoons.scriptPath()
@@ -119,7 +124,20 @@ function obj:start()
     self.menu:setTooltip("Penwise")
     self.menu:setMenu(function() return self:_menuItems() end)
   end
+  if self.checkForUpdates and not self.updateTimer then
+    self.firstUpdateCheck = hs.timer.doAfter(30, function() self:_checkForUpdate() end)
+    self.updateTimer = hs.timer.doEvery(24 * 3600, function() self:_checkForUpdate() end)
+  end
   return self
+end
+
+function obj:_checkForUpdate()
+  self.updateTask = hs.task.new(self.bin, function(code, stdout)
+    local ok, info = pcall(hs.json.decode, stdout or "")
+    self.update = (code == 0 and ok and type(info) == "table" and info.available) and info.detail or nil
+    if self.menu then self.menu:setTitle(self.update and "✎•" or "✎") end
+  end, concat(self.args, { "update", "--check", "--json" }))
+  self.updateTask:start()
 end
 
 --- Penwise:stop()
@@ -129,6 +147,10 @@ function obj:stop()
   if self.menu then
     self.menu:delete()
     self.menu = nil
+  end
+  if self.updateTimer then
+    self.updateTimer:stop()
+    self.updateTimer = nil
   end
   return self
 end
@@ -153,7 +175,12 @@ function obj:_menuItems()
     local label = hotkeyLabel(keys[name])
     return { title = label ~= "" and (title .. "    " .. label) or title, fn = fn }
   end
-  return {
+  local items = {}
+  if self.update then
+    table.insert(items, { title = "Update Penwise (" .. self.update .. ")…", fn = function() self:_openInTerminal("update") end })
+    table.insert(items, { title = "-" })
+  end
+  for _, item in ipairs({
     action("Check selection", "fix", function() self:check("fix") end),
     action("Improve selection", "improve", function() self:check("improve") end),
     action("Quick fix selection", "quick", function() self:quickFix() end),
@@ -161,7 +188,10 @@ function obj:_menuItems()
     { title = "Your recurring fixes…", fn = function() self:showInsights() end },
     { title = "Change model or API key…", fn = function() self:_openInTerminal("setup") end },
     { title = "Check my setup…", fn = function() self:_openInTerminal("doctor") end },
-  }
+  }) do
+    table.insert(items, item)
+  end
+  return items
 end
 
 --- Penwise:showInsights()

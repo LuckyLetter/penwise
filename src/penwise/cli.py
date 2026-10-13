@@ -96,6 +96,8 @@ def build_parser() -> argparse.ArgumentParser:
     p.set_defaults(run=cmd_doctor)
 
     p = sub.add_parser("update", help="update Penwise to the latest version, hotkey included")
+    p.add_argument("--check", action="store_true", help="only say whether an update is available")
+    p.add_argument("--json", action="store_true", help="with --check: answer in JSON (used by the menu bar icon)")
     p.set_defaults(run=cmd_update)
 
     p = sub.add_parser("init", help="write a config file with every setting explained")
@@ -308,7 +310,16 @@ def cmd_doctor(args: argparse.Namespace) -> int:
 
 
 def cmd_update(args: argparse.Namespace) -> int:
-    return updater.run()
+    if not args.check:
+        return updater.run()
+    available = updater.check()
+    if args.json:
+        print(json.dumps({"available": bool(available), "detail": available or ""}))
+    elif available:
+        print(f"An update is available ({available}). Get it with: penwise update")
+    else:
+        print("Penwise is up to date.")
+    return 0
 
 
 def cmd_setup_mac(args: argparse.Namespace) -> int:
