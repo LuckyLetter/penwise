@@ -72,9 +72,12 @@ def test_record_respects_the_history_setting(isolated, monkeypatch, capsys):
     run(["record"], monkeypatch, capsys, stdin=payload)
     assert len(history.load()) == 1
 
+    run(["record", payload], monkeypatch, capsys)  # as an argument, the way the Mac panel sends it
+    assert len(history.load()) == 2
+
     (isolated / "config.toml").write_text("history = false\n")
     run(["record"], monkeypatch, capsys, stdin=payload)
-    assert len(history.load()) == 1
+    assert len(history.load()) == 2
 
 
 def test_init_then_insights(isolated, monkeypatch, capsys):

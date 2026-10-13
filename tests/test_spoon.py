@@ -96,12 +96,8 @@ def test_hotkey_check_and_replace(config, delivery):
     changes = [{key: c[key] for key in ("before", "after", "category")} for c in result["changes"]]
     spoon.message({"action": "replace", "text": result["edited"], "changes": changes})
     spoon.run_tasks()
-    assert spoon.log[-4:] == [
-        "hide panel",
-        "focus target",
-        "cmd+v: Wait until the information arrive.",
-        "ran -m penwise record",
-    ]
+    assert spoon.log[-4:-1] == ["hide panel", "focus target", "cmd+v: Wait until the information arrive."]
+    assert spoon.log[-1].startswith("ran -m penwise record -- ")
     assert spoon.lua.globals().CLIPBOARD == "user clipboard"
     assert len((config / "history.jsonl").read_text().splitlines()) == 2
 

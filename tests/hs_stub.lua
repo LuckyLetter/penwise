@@ -25,8 +25,8 @@ function webview:isVisible() return false end
 function webview:evaluateJavaScript(js) table.insert(JS, js) end
 
 -- Tasks run when the test calls run_tasks(), standing in for Hammerspoon's event loop.
--- As in Hammerspoon, setInput() only queues the input: it is written from the event
--- loop, so stdin closed with closeInput() before then loses it.
+-- Tasks get no stdin: Hammerspoon writes setInput() data later, from the event loop, and
+-- it can be lost (with closeInput()) or never end (without), so the Spoon must not use it.
 TASKS, TIMERS = {}, {}
 
 local function newTask(path, done, stream, args)
@@ -34,8 +34,8 @@ local function newTask(path, done, stream, args)
   local task = { path = path, done = done, stream = stream, args = args }
   function task:start() table.insert(TASKS, self); return self end
   function task:isRunning() return false end
-  function task:setInput(input) self.pending = input; return self end
-  function task:closeInput() self.closed = true; return self end
+  function task:setInput() return self end
+  function task:closeInput() return self end
   return task
 end
 
@@ -50,8 +50,7 @@ function run_tasks()
     end
     if #TASKS == 0 then break end
     local task = table.remove(TASKS, 1)
-    local input = (not task.closed and task.pending) or ""
-    local out, err, code = run_command(task.path, task.args, input)
+    local out, err, code = run_command(task.path, task.args, "")
     log("ran " .. table.concat(task.args, " "))
     if task.stream and DELIVERY == "stream" then
       -- Two chunks, split in the middle of a line, as a real pipe may do.

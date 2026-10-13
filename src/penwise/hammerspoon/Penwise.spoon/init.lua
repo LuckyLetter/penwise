@@ -455,8 +455,9 @@ function obj:_replace(text, changes)
     end)
   end
   if #changes > 0 then
-    self.recordTask = hs.task.new(self.bin, nil, concat(self.args, { "record" }))
-    self.recordTask:setInput(hs.json.encode({ changes = changes }))
+    -- As an argument, like the text in _run: input written to stdin can be lost.
+    local json = hs.json.encode({ changes = changes })
+    self.recordTask = hs.task.new(self.bin, nil, concat(self.args, { "record", "--", json }))
     self.recordTask:start()
   end
 end

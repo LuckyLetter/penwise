@@ -112,7 +112,8 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--refresh", action="store_true", help="only update an installed hotkey; ask nothing")
     p.set_defaults(run=cmd_setup_mac)
 
-    p = sub.add_parser("record", help="save accepted changes (JSON on stdin); used by the Mac panel")
+    p = sub.add_parser("record", help="save accepted changes; used by the Mac panel")
+    p.add_argument("changes", nargs="?", help="the changes as JSON (default: read from stdin)")
     p.set_defaults(run=cmd_record)
     return parser
 
@@ -288,9 +289,9 @@ def cmd_record(args: argparse.Namespace) -> int:
     if not cfg.history:
         return 0
     try:
-        payload = json.loads(sys.stdin.read() or "{}")
+        payload = json.loads((sys.stdin.read() if args.changes is None else args.changes) or "{}")
     except json.JSONDecodeError as exc:
-        raise ConfigError(f"record expects JSON on stdin: {exc}") from exc
+        raise ConfigError(f"record expects JSON: {exc}") from exc
     history.record(payload.get("changes", []))
     return 0
 
