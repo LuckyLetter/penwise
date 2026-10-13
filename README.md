@@ -90,7 +90,7 @@ Three design rules keep it trustworthy:
 | In the review panel |                                   |
 | ------------------- | --------------------------------- |
 | click / 1–9         | undo or redo a single change      |
-| Return              | replace your selection            |
+| Return              | replace your text with the fix    |
 | ⌘C                  | copy the result instead           |
 | Tab                 | switch between Fix and Improve    |
 | Esc                 | close without changing anything   |
@@ -220,8 +220,8 @@ The review panel also tells you when you've made the same fix before. History is
 - Penwise stores your config, your API key in the Keychain, and (unless turned off) the accepted changes: the
   changed words and up to a few words on each side, never whole texts.
 - No telemetry, no accounts, no network calls besides the model API.
-- Hammerspoon needs Accessibility permission to copy your selection and paste the result. Penwise puts your
-  clipboard back afterwards.
+- Hammerspoon needs Accessibility permission to read the text you're checking and paste the result. Penwise
+  puts your clipboard back afterwards.
 
 ## In the terminal
 

@@ -251,16 +251,16 @@ def test_the_menu_bar_offers_every_action_with_its_hotkey(config):
     )
     assert spoon.lua.globals().MENU_TITLE == "✎"
     assert [item["title"] for item in menu_items(spoon)] == [
-        "Check selection    ⌃⌥P",
-        "Improve selection    ⌃⌥⇧P",
-        "Quick fix selection    ⌃⌥⌘P",
+        "Check text    ⌃⌥P",
+        "Improve text    ⌃⌥⇧P",
+        "Quick fix    ⌃⌥⌘P",
         "-",
         "Your recurring fixes…",
         "Try it on a practice note",
         "Change model or API key…",
         "Check my setup…",
     ]
-    click(spoon, "Quick fix selection")
+    click(spoon, "Quick fix")
     spoon.run_tasks()
     assert "cmd+v: Wait until the information arrive." in spoon.log
 
@@ -466,3 +466,11 @@ def test_the_hotkey_in_another_app_checks_that_apps_text(config):
     spoon.lua.globals().FRONT_APP = "org.hammerspoon.Hammerspoon"  # in the panel: switch the mode
     spoon.run('spoon:check("improve")')
     assert spoon.events[-1] == {"type": "begin", "original": "Other text have a eror.", "mode": "improve"}
+
+
+def test_quick_fix_does_nothing_while_the_panel_is_in_front(config):
+    spoon = Spoon("stream")
+    spoon.lua.globals().FRONT_APP = "org.hammerspoon.Hammerspoon"
+    spoon.run("spoon:quickFix()")
+    spoon.run_tasks()
+    assert spoon.log == []

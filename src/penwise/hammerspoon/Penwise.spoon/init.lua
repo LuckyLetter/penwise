@@ -186,9 +186,9 @@ function obj:_menuItems()
     table.insert(items, { title = "-" })
   end
   for _, item in ipairs({
-    action("Check selection", "fix", function() self:check("fix") end),
-    action("Improve selection", "improve", function() self:check("improve") end),
-    action("Quick fix selection", "quick", function() self:quickFix() end),
+    action("Check text", "fix", function() self:check("fix") end),
+    action("Improve text", "improve", function() self:check("improve") end),
+    action("Quick fix", "quick", function() self:quickFix() end),
     { title = "-" },
     { title = "Your recurring fixes…", fn = function() self:showInsights() end },
     { title = "Try it on a practice note", fn = function() self:_runQuietly("try") end },
@@ -205,6 +205,7 @@ end
 --- Shows the fixes you make most often, in the Penwise panel.
 function obj:showInsights()
   self.target = hs.window.focusedWindow()
+  self.app = hs.application.frontmostApplication() -- to go back to when you close it
   self.anchor = nil
   self:_showPanel()
   self:_send(hs.json.encode({ type = "note", title = "Your recurring fixes", text = "Loading…" }))
@@ -294,9 +295,10 @@ function obj:_withSelection(callback)
     hs.alert.show("Penwise: turn on Hammerspoon in System Settings → Privacy & Security → Accessibility", 6)
     return
   end
+  local app = hs.application.frontmostApplication()
+  if app and app:bundleID() == HAMMERSPOON then return end -- the panel is in front: no app text to read
   self.target = hs.window.focusedWindow()
   self.style = nil -- Improve's tone, when chosen in the panel
-  local app = hs.application.frontmostApplication()
   self.app = app
   -- Where the text is going (an email, a chat) sets the tone of "improve".
   self.context = {
