@@ -11,7 +11,8 @@ Setup is one command that asks a few questions and does the rest.
 
 **What it does**
 
-- **Fixes your English anywhere on your Mac.** Select text, press **⌃⌥P**, review the changes, press Return.
+- **Fixes your English anywhere on your Mac.** Press **⌃⌥P** in any text box, review the changes right
+  next to your text, press Return. No copying and pasting, and usually no selecting either.
 - **Teaches as it fixes.** Every change has a label (Articles, Prepositions, Word form, …) and a short rule;
   *Your recurring fixes* shows what you get wrong most often.
 - **Fills in what you can't say yet.** Write a phrase in your own language or as `[[your idea]]`, and Penwise
@@ -97,9 +98,10 @@ Three design rules keep it trustworthy:
 Prefer clicking? The **✎ icon in the menu bar** has the same three actions, plus *Your recurring fixes*,
 *Change model or API key*, and *Check my setup*.
 
-No need to select anything in a short text box (a message, a comment, up to 2,000 characters): press the hotkey
-and Penwise takes the whole box. The panel shows a timer while it works, and closes by itself when your text
-needs no changes. To change the hotkeys, edit the Penwise block in `~/.hammerspoon/init.lua`; running
+**You rarely need to select anything.** With nothing selected, Penwise reads the text straight from the app: in a
+short text box (a message, a comment, up to 2,000 characters) it takes the whole box; in a longer document, the
+paragraph your cursor is in. The panel opens right above your text (or below, if there's no room), sized to fit,
+shows a timer while it works, and closes by itself when your text needs no changes. To change the hotkeys, edit the Penwise block in `~/.hammerspoon/init.lua`; running
 `penwise setup` again keeps your changes.
 
 ### The right tone, automatically

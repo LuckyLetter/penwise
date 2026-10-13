@@ -429,6 +429,23 @@ function render() {
   document.querySelector(".modes").hidden = reading;
   document.getElementById("cancel").firstChild.textContent = reading ? "Close" : "Cancel";
   document.getElementById("hint").textContent = ready && state.changes.length ? "Click a change, or press its number, to undo it." : "";
+  if (state.status !== "idle") reportSize();
+}
+
+// Tell Hammerspoon how tall the content is, so the window fits it: a short text gets a
+// small panel. `viewport` lets it work out how much the window adds (the title bar).
+let reportedHeight = 0;
+
+function reportSize() {
+  const main = document.getElementById("main");
+  main.style.flex = "none"; // as tall as its content, for a moment
+  const height = document.querySelector("header").offsetHeight + main.offsetHeight +
+    document.querySelector("footer").offsetHeight;
+  main.style.flex = "";
+  if (Math.abs(height - reportedHeight) > 2) {
+    reportedHeight = height;
+    post({ action: "size", height, viewport: window.innerHeight });
+  }
 }
 
 function setMode(mode) {
@@ -511,6 +528,11 @@ document.querySelectorAll(".modes button").forEach((button) => {
 document.getElementById("cancel").addEventListener("click", () => post({ action: "cancel" }));
 document.getElementById("copy").addEventListener("click", copy);
 document.getElementById("replace").addEventListener("click", replace);
+
+// A new width can change how the text wraps.
+window.addEventListener("resize", () => {
+  if (state.status !== "idle") reportSize();
+});
 
 // Any interaction keeps a "looks good" panel open.
 document.addEventListener("mousedown", () => clearTimeout(autoClose));

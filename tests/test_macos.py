@@ -86,6 +86,8 @@ def test_review_panel_and_quick_fix_in_real_hammerspoon(hammerspoon):
         lambda v: '"ready"' in v,
     )
     assert panel == '["ready","This has an error."]'
+    height = float(hs("return tostring(spoon.Penwise.webview:frame().h)"))
+    assert 150 <= height < 560, height  # sized to fit the content, not the old fixed 560
 
     # The quick fix: the result arrives through hs.task, with the text passed as an argument.
     hs(

@@ -174,7 +174,8 @@ def test_apps_without_accessibility_text_use_copy(config):
     spoon.run('spoon:check("fix")')
     spoon.run_tasks()  # the copy is read from a timer, like in Hammerspoon
     spoon.message({"action": "ready"})
-    assert spoon.log[0] == "cmd+c: user clipboard"
+    # Electron apps (Slack, Teams, ...) are asked to show their text, for next time.
+    assert spoon.log[:2] == ["app AXManualAccessibility = true", "cmd+c: user clipboard"]
     assert spoon.events[0]["original"] == "Wait untill noon."
     assert g.CLIPBOARD == "user clipboard"  # put back right after copying
 
@@ -287,3 +288,91 @@ def test_the_app_sets_the_tone(config):
     spoon.run_tasks()
     assert any("--app com.google.Chrome --window Inbox - Gmail" in line for line in spoon.log)
     assert spoon.events[1]["style"] == "email"
+
+
+def panel_frame(spoon):
+    frame = spoon.lua.globals().PANEL.frame
+    return {key: frame[key] for key in ("x", "y", "w", "h")}
+
+
+def test_the_panel_opens_above_the_text_field_and_fits_its_content(config):
+    spoon = Spoon("stream")
+    field = {"x": 100, "y": 800}, {"w": 600, "h": 40}
+    spoon.lua.globals().FIELD = spoon.to_lua(
+        {"AXRole": "AXTextArea", "AXSelectedText": "", "AXValue": SELECTION, "AXPosition": field[0], "AXSize": field[1]}
+    )
+    spoon.run('spoon:check("fix")')
+    assert panel_frame(spoon) == {"x": 100, "y": 800 - 8 - 240, "w": 600, "h": 240}
+
+    # The panel's content needs 300 points; the window adds a 28-point title bar.
+    spoon.message({"action": "size", "height": 300, "viewport": 240 - 28})
+    assert panel_frame(spoon) == {"x": 100, "y": 800 - 8 - 328, "w": 600, "h": 328}  # still just above
+
+
+def test_the_panel_opens_below_a_field_at_the_top_of_the_screen(config):
+    spoon = Spoon("stream")
+    spoon.lua.globals().FIELD = spoon.to_lua(
+        {
+            "AXRole": "AXTextField",
+            "AXSelectedText": SELECTION,
+            "AXPosition": {"x": 1200, "y": 30},
+            "AXSize": {"w": 200, "h": 22},
+        }
+    )
+    spoon.run('spoon:check("fix")')
+    assert panel_frame(spoon) == {"x": 1440 - 480 - 8, "y": 30 + 22 + 8, "w": 480, "h": 240}
+
+
+def test_in_a_document_the_panel_opens_at_the_selection(config):
+    spoon = Spoon("stream")
+    spoon.lua.globals().FIELD = spoon.to_lua(
+        {
+            "AXRole": "AXTextArea",
+            "AXSelectedText": SELECTION,
+            "AXSelectedTextRange": {"location": 50, "length": len(SELECTION)},
+            "AXPosition": {"x": 0, "y": 0},
+            "AXSize": {"w": 1000, "h": 880},
+            "BOUNDS": {"x": 300, "y": 400, "w": 250, "h": 20},
+        }
+    )
+    spoon.run('spoon:check("fix")')
+    assert panel_frame(spoon) == {"x": 300, "y": 400 - 8 - 240, "w": 480, "h": 240}
+
+
+def utf16(text):
+    return len(text.encode("utf-16-le")) // 2
+
+
+def check_at_cursor(spoon, value, cursor):
+    spoon.lua.globals().FIELD = spoon.to_lua(
+        {
+            "AXRole": "AXTextArea",
+            "AXSelectedText": "",
+            "AXValue": value,
+            "AXSelectedTextRange": {"location": utf16(value[:cursor]), "length": 0},
+        }
+    )
+    spoon.run('spoon:check("fix")')
+    spoon.message({"action": "ready"})
+    selected = spoon.lua.globals().FIELD.AXSelectedTextRange
+    return spoon.events[0]["original"], (selected.location, selected.length)
+
+
+def test_with_nothing_selected_in_a_long_field_the_paragraph_at_the_cursor_is_checked(config):
+    spoon = Spoon("stream")
+    spoon.run("spoon.wholeFieldLimit = 60")
+    paragraph = "Second 😀 paragraph have a eror.\nIt continue here."
+    value = f"First paragraph is fine.\n\n{paragraph}\n\n  Third one, which is also fine."
+    original, selected = check_at_cursor(spoon, value, value.index("paragraph have"))
+    assert original == paragraph
+    # Selected (in UTF-16 units, like macOS counts), so that Replace puts the fix there.
+    assert selected == (utf16(value[: value.index(paragraph)]), utf16(paragraph))
+    assert not any(line.startswith("cmd+") for line in spoon.log)
+
+
+def test_without_blank_lines_the_line_at_the_cursor_is_checked(config):
+    spoon = Spoon("stream")
+    spoon.run("spoon.wholeFieldLimit = 30")
+    value = "Line one is here.\nLine two have a eror.\nLine three."
+    original, _ = check_at_cursor(spoon, value, value.index("eror") + 4)  # at the end of the line
+    assert original == "Line two have a eror."

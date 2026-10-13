@@ -44,7 +44,11 @@ def check_result(original, edited):
 
 
 def sent(page):
-    return page.evaluate("window.sent")
+    return [m for m in page.evaluate("window.sent") if m["action"] != "size"]
+
+
+def sizes(page):
+    return [m["height"] for m in page.evaluate("window.sent") if m["action"] == "size"]
 
 
 def test_panel_says_ready_on_load(page):
@@ -217,3 +221,11 @@ def test_first_time_tips(page):
     send(page, {"type": "start", "model": "m", "explain": False, "tips": False})
     send(page, check_result("a eror", "an error"))
     assert page.locator(".tips").count() == 0
+
+
+def test_the_panel_asks_for_a_window_that_fits(page):
+    send(page, {"type": "begin", "original": "a eror", "mode": "fix"})
+    short = sizes(page)[-1]
+    assert 120 < short < 260
+    send(page, check_result("a eror", "an error"))
+    assert sizes(page)[-1] > short  # the list of changes needs more room

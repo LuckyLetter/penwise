@@ -27,7 +27,8 @@ obj.args = {}
 --- Penwise.wholeFieldLimit
 --- Variable
 --- With nothing selected, a text field holding at most this many characters (a message,
---- a comment, a form field) is checked as a whole. Set to 0 to always require a selection.
+--- a comment, a form field) is checked as a whole; in a longer one, the paragraph at the
+--- cursor is. Set to 0 to always require a selection.
 obj.wholeFieldLimit = 2000
 
 --- Penwise.showMenu
@@ -41,6 +42,8 @@ obj.showMenu = true
 obj.checkForUpdates = true
 
 obj.logger = hs.logger.new("Penwise")
+
+local PANEL_WIDTH = 640
 
 local spoonPath = hs.spoons.scriptPath()
 
@@ -93,6 +96,7 @@ end
 
 function obj:init()
   self.html = readFile(spoonPath .. "panel.html")
+  self.panelHeight = 240 -- until the panel says how much room its content needs
   self.run = 0
   self.queue = {}
   return self
@@ -199,6 +203,7 @@ end
 --- Shows the fixes you make most often, in the Penwise panel.
 function obj:showInsights()
   self.target = hs.window.focusedWindow()
+  self.anchor = nil
   self:_showPanel()
   self:_send(hs.json.encode({ type = "note", title = "Your recurring fixes", text = "Loading…" }))
   self.insightsTask = hs.task.new(self.bin, function(_, stdout, stderr)
@@ -275,6 +280,7 @@ function obj:_withSelection(callback)
   end
   self.target = hs.window.focusedWindow()
   local app = hs.application.frontmostApplication()
+  self.app = app
   -- Where the text is going (an email, a chat) sets the tone of "improve".
   self.context = {
     "--app", (app and app:bundleID()) or "",
@@ -298,23 +304,111 @@ local function attribute(element, name)
   if ok then return value end
 end
 
--- Ask the app for its selected text. With nothing selected in a short text field, select
--- and use the whole field. If the app can't say, copy the selection with ⌘C.
+local function hasText(value)
+  return type(value) == "string" and value:find("%S") ~= nil
+end
+
+-- macOS counts text in UTF-16 units; Lua strings count bytes (UTF-8).
+local function utf16Length(text)
+  local units = 0
+  for _, code in utf8.codes(text) do units = units + (code > 0xFFFF and 2 or 1) end
+  return units
+end
+
+-- The byte index of the character `units` UTF-16 units into `text`.
+local function byteIndex(text, units)
+  local count = 0
+  for position, code in utf8.codes(text) do
+    if count >= units then return position end
+    count = count + (code > 0xFFFF and 2 or 1)
+  end
+  return #text + 1
+end
+
+-- The first and last byte of the block of `text` around byte `at`, with blocks split
+-- at `separator` and surrounding whitespace left out. Nil on an empty block.
+local function blockAt(text, at, separator)
+  local first = 1
+  while true do
+    local from, to = text:find(separator, first)
+    if not from or at <= from then
+      local last = from and from - 1 or #text
+      first = text:find("%S", first)
+      if not first or first > last then return nil end
+      return first, first + #text:sub(first, last):match("^(.-)%s*$") - 1
+    end
+    first = to + 1
+  end
+end
+
+-- The paragraph at byte `at`: the lines between blank lines, or only the line itself
+-- when that block is longer than `limit` (in documents without blank lines).
+local function paragraphAt(text, at, limit)
+  local first, last = blockAt(text, at, "[\r\n]%s*[\r\n]")
+  if first and last - first >= limit then first, last = blockAt(text, at, "[\r\n]") end
+  return first, last
+end
+
+-- A rectangle on screen, or nil when `x`, `y`, `w` and `h` aren't all numbers.
+local function rect(x, y, w, h)
+  for _, value in ipairs({ x, y, w, h }) do
+    if type(value) ~= "number" then return nil end
+  end
+  if h > 0 then return { x = x, y = y, w = w, h = h } end
+end
+
+local function frameOf(element)
+  local position, size = attribute(element, "AXPosition"), attribute(element, "AXSize")
+  if type(position) == "table" and type(size) == "table" then
+    return rect(position.x, position.y, size.w, size.h)
+  end
+end
+
+local function selectionBounds(element)
+  local range = attribute(element, "AXSelectedTextRange")
+  if type(range) ~= "table" then return nil end
+  local ok, bounds = pcall(function() return element:parameterizedAttributeValue("AXBoundsForRange", range) end)
+  if ok and type(bounds) == "table" then return rect(bounds.x, bounds.y, bounds.w, bounds.h) end
+end
+
+-- Where the text is on screen: the text field, or in a large one (a document), the selection.
+local function textBounds(element)
+  local frame = frameOf(element)
+  if frame and frame.h <= 200 then return frame end
+  return selectionBounds(element) or frame
+end
+
+-- Ask the app for its selected text. With nothing selected, use the whole text field if it
+-- is short, or else the paragraph at the cursor. If the app can't say, copy with ⌘C.
 function obj:_readSelection(callback)
   local element = attribute(hs.axuielement.systemWideElement(), "AXFocusedUIElement")
+  self.anchor = element and textBounds(element)
   if element then
     local selected = attribute(element, "AXSelectedText")
-    if type(selected) == "string" and selected:find("%S") then
+    if hasText(selected) then
       callback(selected)
       return
     end
     local value = attribute(element, "AXValue")
-    if TEXT_FIELD_ROLES[attribute(element, "AXRole")] and type(value) == "string" and value:find("%S")
-      and #value <= self.wholeFieldLimit then
-      hs.eventtap.keyStroke({ "cmd" }, "a", 0)
-      callback(value)
-      return
+    if self.wholeFieldLimit > 0 and TEXT_FIELD_ROLES[attribute(element, "AXRole")] and hasText(value) then
+      if #value <= self.wholeFieldLimit then
+        hs.eventtap.keyStroke({ "cmd" }, "a", 0)
+        self.anchor = frameOf(element) or self.anchor
+        callback(value)
+        return
+      end
+      local paragraph = self:_selectParagraph(element, value)
+      if paragraph then
+        self.anchor = selectionBounds(element) or self.anchor
+        callback(paragraph)
+        return
+      end
     end
+  end
+  if not hasText(element and attribute(element, "AXValue")) and self.app then
+    -- Electron apps (Slack, Teams, Discord, ...) describe their text fields to other apps
+    -- only when asked to. Ask, so that next time the text can be read without copying.
+    pcall(function() hs.axuielement.applicationElement(self.app):setAttributeValue("AXManualAccessibility", true) end)
   end
 
   local saved = hs.pasteboard.readAllData()
@@ -332,12 +426,45 @@ function obj:_readSelection(callback)
   end)
 end
 
+-- Select the paragraph at the cursor, so that Replace puts the fix there. Returns its text,
+-- or nil when the app doesn't let Penwise select it.
+function obj:_selectParagraph(element, value)
+  local ok, paragraph = pcall(function()
+    local cursor = attribute(element, "AXSelectedTextRange")
+    local units = type(cursor) == "table" and (cursor.location or cursor.loc)
+    if not units then return nil end
+    local first, last = paragraphAt(value, byteIndex(value, units), self.wholeFieldLimit)
+    if not first then return nil end
+    local text = value:sub(first, last)
+    local range = { location = utf16Length(value:sub(1, first - 1)), length = utf16Length(text) }
+    element:setAttributeValue("AXSelectedTextRange", range)
+    if attribute(element, "AXSelectedText") == text then return text end
+  end)
+  return ok and paragraph or nil
+end
+
+-- Where the panel goes: just above the text, below it when there is no room above, or
+-- else in the middle of the screen.
+local function placePanel(anchor, size, area)
+  local gap = 8
+  if anchor then
+    local x = math.max(area.x + gap, math.min(anchor.x, area.x + area.w - size.w - gap))
+    if anchor.y - gap - size.h >= area.y then
+      return { x = x, y = anchor.y - gap - size.h }
+    end
+    if anchor.y + anchor.h + gap + size.h <= area.y + area.h then
+      return { x = x, y = anchor.y + anchor.h + gap }
+    end
+  end
+  return { x = area.x + (area.w - size.w) / 2, y = area.y + (area.h - size.h) / 3 }
+end
+
 function obj:_showPanel()
   if not self.webview then
     local content = hs.webview.usercontent.new("penwise")
     content:setCallback(function(message) self:_onMessage(message.body) end)
     self.ready = false
-    self.webview = hs.webview.new({ x = 0, y = 0, w = 640, h = 560 }, {}, content)
+    self.webview = hs.webview.new({ x = 0, y = 0, w = PANEL_WIDTH, h = self.panelHeight }, {}, content)
       :windowStyle({ "titled", "closable", "resizable" })
       :windowTitle("Penwise")
       :allowTextEntry(true)
@@ -347,14 +474,22 @@ function obj:_showPanel()
       end)
       :html(self.html)
   end
-  local screen = (self.target and self.target:screen()) or hs.screen.mainScreen()
-  local area = screen:frame()
-  local size = self.webview:frame()
-  self.webview:topLeft({ x = area.x + (area.w - size.w) / 2, y = area.y + (area.h - size.h) / 3 })
+  self:_placePanel()
   self.webview:show()
   hs.focus()
   local window = self.webview:hswindow()
   if window then window:focus() end
+end
+
+-- Size the panel to fit its content, and put it next to the text being checked. It is as
+-- wide as the text field, within limits.
+function obj:_placePanel()
+  local screen = (self.target and self.target:screen()) or hs.screen.mainScreen()
+  local area = screen:frame()
+  local width = self.anchor and math.max(480, math.min(720, self.anchor.w)) or PANEL_WIDTH
+  local size = { w = width, h = math.max(150, math.min(area.h * 0.7, self.panelHeight)) }
+  local spot = placePanel(self.anchor, size, area)
+  self.webview:frame({ x = spot.x, y = spot.y, w = size.w, h = size.h })
 end
 
 -- Check the text and stream the results into the review panel.
@@ -424,6 +559,14 @@ function obj:_onMessage(body)
     self.ready = true
     for _, json in ipairs(self.queue) do self:_send(json) end
     self.queue = {}
+  elseif body.action == "size" then
+    -- The panel's content needs `height`; the window adds its title bar to that. (A window
+    -- resized meanwhile gives an odd difference: keep the last good one then.)
+    local chrome = self.webview:frame().h - (body.viewport or 0)
+    if chrome < 0 or chrome > 60 then chrome = self.chrome or 28 end
+    self.chrome = chrome
+    self.panelHeight = body.height + chrome
+    if self.webview:isVisible() then self:_placePanel() end
   elseif body.action == "replace" then
     self:_replace(body.text, body.changes or {})
   elseif body.action == "copy" then
