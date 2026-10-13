@@ -4,7 +4,7 @@
 -- FIELD.BOUNDS where the selected text is on screen. PANEL holds the panel's window.
 -- FIELD.IGNORES_AX_SELECTION makes the app ignore selections made through Accessibility, and
 -- FIELD.IGNORES_SELECT_ALL makes it ignore ⌘A. HELD_KEYS is how many times the hotkey's
--- modifiers still read as held down. FRONT_APP is the app in front, when
+-- modifiers still read as held down. FIELD.COPY_ALL is what ⌘A then ⌘C copies. FRONT_APP is the app in front, when
 -- it isn't the one being edited (APP_ID). FULL_SCREEN puts the app in full screen, FIELD.READONLY
 -- makes the text not editable, and ELECTRON_FIELD is what an Electron app shows once asked to.
 
@@ -143,7 +143,8 @@ hs = {
   screen = { mainScreen = function() return screen end },
   axuielement = {
     systemWideElement = function()
-      return { attributeValue = function(_, name) return name == "AXFocusedUIElement" and field or nil end }
+      -- FOCUS_LOST: no text box has the focus any more.
+      return { attributeValue = function(_, name) return name == "AXFocusedUIElement" and not FOCUS_LOST and field or nil end }
     end,
     applicationElement = function()
       return {
@@ -171,6 +172,10 @@ hs = {
       log(table.concat(mods, "+") .. "+" .. key .. ": " .. tostring(CLIPBOARD))
       if cmd and key == "c" and COPY_RESULT and (HELD_KEYS or 0) == 0 then
         CLIPBOARD, COUNT = COPY_RESULT, COUNT + 1
+      elseif cmd and key == "c" and SELECTED_ALL and FIELD.COPY_ALL then
+        CLIPBOARD, COUNT = FIELD.COPY_ALL, COUNT + 1 -- an app that only gives its text by copying
+      elseif cmd and key == "a" and FIELD.COPY_ALL then
+        SELECTED_ALL = true
       elseif cmd and key == "a" and not FIELD.IGNORES_SELECT_ALL then
         if FIELD.SELECTION_LAG then FIELD.PENDING_SELECTION = FIELD.AXValue else FIELD.AXSelectedText = FIELD.AXValue end
       end

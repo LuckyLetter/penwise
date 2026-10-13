@@ -241,9 +241,11 @@ System Settings → Keyboard → Keyboard Shortcuts → Services. You get the co
   changes on technical text.
 - A few apps don't allow reading or selecting text this way. When Penwise can't select your original text to
   replace it, it doesn't paste next to it: it copies the fix and tells you, so you can select the text and press ⌘V.
-- In a terminal (Terminal, iTerm2, Warp, …), select the text first (Penwise leaves out the prompt and the box
-  Claude Code draws). Replace then clears the line you're typing (⌃E ⌃U) and pastes the fix: for a command or a
-  Claude Code prompt you just typed. For text you can't edit, like a web page, the button says *Copy*.
+- In a terminal (Terminal, iTerm2, Warp, …), Penwise checks what you're typing: the command after the prompt, or
+  the prompt in Claude Code's or Codex's input box (or the text you select). Replace clears that line (⌃E ⌃U) and
+  pastes the fix. For text you can't edit, like a web page, the button says *Copy*.
+- Some apps (WeChat, Codex, …) don't let other apps read their text boxes. There Penwise selects all in the box
+  and copies it, as you would by hand, and Replace selects all again and pastes.
 - If the hotkey doesn't do what you expect, run `penwise doctor`: it ends with what the hotkey did, step by step
   (the app, the kind of text box, what was selected and pasted; never your text).
 

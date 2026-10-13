@@ -154,7 +154,7 @@ def test_quick_fix_says_when_there_is_nothing_to_fix(config):
 FIELD_TEXT = "Wait untill noon, please."
 
 
-def check_whole_field(spoon, **app):
+def check_whole_field(spoon, focus_lost=False, **app):
     """Check a text field with nothing selected, then press Replace."""
     spoon.lua.globals().FIELD = spoon.to_lua(
         {"AXRole": "AXTextField", "AXSelectedText": "", "AXValue": FIELD_TEXT, **app}
@@ -164,6 +164,7 @@ def check_whole_field(spoon, **app):
     spoon.run_tasks()
     assert spoon.events[0]["original"] == FIELD_TEXT
     assert not any(line.startswith("cmd+") for line in spoon.log)  # nothing selected while you review
+    spoon.lua.globals().FOCUS_LOST = focus_lost
     spoon.message({"action": "replace", "text": "Wait until noon, please.", "changes": []})
     spoon.run_tasks()
 
@@ -181,9 +182,15 @@ def test_chrome_and_electron_apps_show_the_selection_a_moment_later(config):
     assert spoon.log[-2:] == ["cmd+a: user clipboard", "cmd+v: Wait until noon, please."]
 
 
-def test_when_cmd_a_doesnt_select_accessibility_does(config):
+def test_page_boxes_that_dont_report_the_selection_still_get_the_fix(config):
     spoon = Spoon("stream")
-    check_whole_field(spoon, IGNORES_SELECT_ALL=True)
+    check_whole_field(spoon, IGNORES_SELECT_ALL=True)  # like Google's search box: ⌘A shows nowhere
+    assert spoon.log[-2:] == ["cmd+a: user clipboard", "cmd+v: Wait until noon, please."]  # the box kept your text
+
+
+def test_when_cmd_a_cant_be_confirmed_accessibility_selects(config):
+    spoon = Spoon("stream")
+    check_whole_field(spoon, focus_lost=True, IGNORES_SELECT_ALL=True)
     selected = spoon.lua.globals().FIELD.AXSelectedTextRange
     assert (selected.location, selected.length) == (0, len(FIELD_TEXT))
     assert spoon.log[-1] == "cmd+v: Wait until noon, please."
@@ -191,7 +198,7 @@ def test_when_cmd_a_doesnt_select_accessibility_does(config):
 
 def test_when_the_text_cant_be_selected_the_fix_is_copied_not_pasted_next_to_it(config):
     spoon = Spoon("stream")
-    check_whole_field(spoon, IGNORES_AX_SELECTION=True, IGNORES_SELECT_ALL=True)
+    check_whole_field(spoon, focus_lost=True, IGNORES_AX_SELECTION=True, IGNORES_SELECT_ALL=True)
     assert not any(line.startswith("cmd+v") for line in spoon.log)
     assert spoon.log[-1].startswith("alert Penwise: couldn't select your text")
     assert spoon.lua.globals().CLIPBOARD == "Wait until noon, please."
@@ -486,15 +493,44 @@ def test_quick_fix_does_nothing_while_the_panel_is_in_front(config):
 TERMINAL_TEXT = "me@mac ~ % penwise history\nHistory: ~/.config/penwise/history.jsonl\nme@mac ~ % "
 
 
-def test_a_terminal_is_never_read_whole(config):
-    spoon = Spoon("stream")
+def check_terminal(spoon, window_text):
     g = spoon.lua.globals()
     g.APP_ID = "com.apple.Terminal"
-    g.FIELD = spoon.to_lua({"AXRole": "AXTextArea", "AXSelectedText": "", "AXValue": TERMINAL_TEXT})
+    g.FIELD = spoon.to_lua({"AXRole": "AXTextArea", "AXSelectedText": "", "AXValue": window_text})
     spoon.run('spoon:check("fix")')
+    if g.SEND_MESSAGE:  # the panel opened
+        spoon.message({"action": "ready"})
     spoon.run_tasks()
+
+
+def test_a_terminal_is_never_read_whole(config):
+    spoon = Spoon("stream")
+    check_terminal(spoon, TERMINAL_TEXT)
     assert spoon.events == []  # the commands and output above the prompt are not your text
-    assert spoon.log[-1] == "alert Penwise: in a terminal, select the text to check first"
+    assert spoon.log[-1] == "alert Penwise: nothing typed here: select the text to check"
+
+
+def test_in_a_terminal_the_command_you_are_typing_is_checked(config):
+    spoon = Spoon("stream")
+    check_terminal(spoon, TERMINAL_TEXT + "echo 'Wait untill noon'\n\n")
+    assert spoon.events[0]["original"] == "echo 'Wait untill noon'"
+
+
+def test_in_claude_code_the_prompt_you_are_typing_is_checked(config):
+    spoon = Spoon("stream")
+    window = "\n".join(
+        [
+            "> an earlier prompt, in the conversation above",
+            "⏺ An earlier answer.",
+            "╭──────────────────────────────────────╮",
+            "│ > Wait untill the informations       │",
+            "│   arrive.                            │",
+            "╰──────────────────────────────────────╯",
+            "  ? for shortcuts",
+        ]
+    )
+    check_terminal(spoon, window)
+    assert spoon.events[0]["original"] == "Wait untill the informations arrive."
 
 
 def test_in_a_terminal_replace_clears_the_line_you_are_typing_and_pastes_the_fix(config):
@@ -641,3 +677,42 @@ def test_the_log_says_what_happened_without_your_text(config, tmp_path):
     ]:
         assert step in log
     assert "untill" not in log and "until" not in log
+
+
+def test_apps_that_dont_describe_their_text_box_get_select_all_and_copy(config):
+    spoon = Spoon("stream")
+    g = spoon.lua.globals()
+    g.APP_ID = "com.tencent.xinWeChat"
+    g.FIELD = spoon.to_lua({"AXRole": "AXTextArea", "AXValue": "", "COPY_ALL": "Wait untill noon."})
+    spoon.run('spoon:check("fix")')
+    spoon.run_tasks()
+    spoon.message({"action": "ready"})
+    assert spoon.events[0]["original"] == "Wait untill noon."
+    assert [line.split(":")[0] for line in spoon.log if line.startswith("cmd+")] == ["cmd+c", "cmd+a", "cmd+c"]
+    assert g.CLIPBOARD == "user clipboard"
+
+    spoon.message({"action": "replace", "text": "Wait until noon.", "changes": []})
+    spoon.run_tasks()
+    assert spoon.log[-2:] == ["cmd+a: user clipboard", "cmd+v: Wait until noon."]
+
+
+def test_cancel_after_select_all_deselects(config):
+    spoon = Spoon("stream")
+    g = spoon.lua.globals()
+    g.FIELD = spoon.to_lua({"AXRole": "AXTextArea", "AXValue": "", "COPY_ALL": "Wait untill noon."})
+    spoon.run('spoon:check("fix")')
+    spoon.run_tasks()
+    spoon.message({"action": "ready"})
+    spoon.message({"action": "cancel"})
+    spoon.run_tasks()
+    assert spoon.log[-1] == "+right: user clipboard"  # typing won't replace your whole message
+
+
+def test_a_second_press_while_reading_is_ignored(config):
+    spoon = Spoon("stream")
+    g = spoon.lua.globals()
+    g.FIELD = spoon.to_lua({})
+    g.COPY_RESULT = "Wait untill noon."
+    spoon.run('spoon:check("fix"); spoon:check("fix")')  # pressed twice before the copy came back
+    spoon.run_tasks()
+    assert [line for line in spoon.log if line.startswith("cmd+c")] == ["cmd+c: user clipboard"]
