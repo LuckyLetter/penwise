@@ -15,8 +15,8 @@ Setup is one command that asks a few questions and does the rest.
   next to your text, press Return. No copying and pasting, and usually no selecting either.
 - **Teaches as it fixes.** Every change has a label (Articles, Prepositions, Word form, …) and a short rule;
   *Your recurring fixes* shows what you get wrong most often.
-- **Fills in what you can't say yet.** Write a phrase in your own language or as `[[your idea]]`, and Penwise
-  writes it in English.
+- **Fills in what you can't say yet.** Write a phrase in your own language or as `[[your idea]]`, or leave
+  `[[?]]` where you can't find the word, and Penwise writes it in English.
 - **Safe and in your control.** It never changes numbers, citations, acronyms, math, code or links on its own; you
   can undo any single change; with a local model nothing leaves your Mac.
 - **Simple to set up and keep current.** `penwise setup` asks a few questions and does the rest; the ✎ menu bar
@@ -121,12 +121,14 @@ change, or run `penwise keep Pytorch`; `penwise keep` lists the words you keep.
 
 ### Not sure how to say it? Leave it to Penwise
 
-Write the part you're unsure about in your own language, or as a note in double brackets, and check as usual:
+Write the part you're unsure about in your own language, or as a note in double brackets, or leave `[[?]]` where
+you can't find the word, and check as usual:
 
 ```text
 In this paper, 我们提出 a new method for 图像分割.           →  In this paper, we propose a new method for image segmentation.
 The results [[show very clear]] that the model is robust.  →  The results clearly show that the model is robust.
 We [[want to say: did not have enough time]] to test more. →  We did not have enough time to test more.
+Thank you for your quick reply, I [[?]] it.                →  Thank you for your quick reply, I appreciate it.
 ```
 
 Penwise notices these by itself (any non-Latin script, or `[[…]]`) and fills in the English. Each filled-in part

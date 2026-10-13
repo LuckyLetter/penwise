@@ -408,7 +408,7 @@ function render() {
     if (state.tips && state.changes.length) {
       main.append(el("div", { class: "tips" },
         "New here? Click a change to undo it, press Return to replace your text. ",
-        "Not sure how to say something? Write it in your own language or [[like this]]."));
+        "Not sure how to say something? Write it in your own language or [[like this]], or leave [[?]] for a word."));
     }
     for (const warning of state.warnings) main.append(el("div", { class: "banner" }, warning));
     main.append(renderText());

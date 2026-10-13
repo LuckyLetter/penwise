@@ -170,6 +170,13 @@ def test_mixed_language_text_is_filled_in():
     assert not result.warnings
 
 
+def test_a_gap_is_filled_with_the_word_that_fits():
+    chat = fake_chat({"[[?]]": "These results are consistent with our hypothesis."})
+    result = engine.check("These results are [[?]] with our hypothesis.", chat)
+    assert chat.calls[0].startswith("Write this in English:")
+    assert [(c.before, c.after, c.category) for c in result.changes] == [("[[?]]", "consistent", "filled")]
+
+
 def test_filling_in_allows_a_longer_answer_but_not_a_reply():
     original = "我们的方法很好。"
     assert engine.sanity_check(original, "Our method works very well, as the results show.", "fix", fill=True) is None

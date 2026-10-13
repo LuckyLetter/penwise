@@ -7,6 +7,7 @@ for the same kind of change. The model's own one-line "why" is shown separately.
 from __future__ import annotations
 
 import os
+import re
 
 from penwise.diff import NEEDS_FILL, WORD, Change
 
@@ -175,11 +176,14 @@ NOTES = {
 
 A_AN_NOTE = "Use “an” before a vowel sound (an hour, an LLM, an MRI scan) and “a” before a consonant sound (a user, a one-off, a URL)."
 COMMA_ADDED_NOTE = "A comma usually follows an opening word or phrase (However, In this work,) and goes before and/but/so when they join two full sentences."
+SPLICE_NOTE = "A comma alone can't join two full sentences: use a semicolon or a full stop, or add and/but/so."
 COMMA_REMOVED_NOTE = "No comma between a subject and its verb, or before a “that” clause."
 HYPHEN_NOTE = (
     "Hyphenate words that together describe a noun that follows them (a well-known method, state-of-the-art results)."
 )
 APOSTROPHE_NOTE = "An apostrophe marks possession (the model's output) or a contraction (it's = it is)."
+GAP_NOTE = "The word that fits your [[?]]. Words that go together (consistent with, express gratitude) are best learned as a pair."
+GAP = re.compile(r"\[\[\s*\?*\s*\]\]")
 
 
 def words(text: str) -> list[str]:
@@ -192,7 +196,7 @@ def classify(before: str, after: str) -> tuple[str, str]:
     bw, aw = words(b), words(a)
 
     if NEEDS_FILL.search(b):
-        return "filled", NOTES["filled"]
+        return "filled", GAP_NOTE if GAP.fullmatch(b) else NOTES["filled"]
     if b == a:
         return "spacing", NOTES["spacing"]
     if b.lower() == a.lower():
@@ -246,7 +250,8 @@ def _punctuation_note(before: str, after: str) -> str:
     if after.count(",") > before.count(","):
         return COMMA_ADDED_NOTE
     if after.count(",") < before.count(","):
-        return COMMA_REMOVED_NOTE
+        joined = sum(after.count(mark) - before.count(mark) for mark in ";.") > 0
+        return SPLICE_NOTE if joined else COMMA_REMOVED_NOTE
     if after.count("-") > before.count("-"):
         return HYPHEN_NOTE
     if after.count("'") + after.count("’") != before.count("'") + before.count("’"):

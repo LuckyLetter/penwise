@@ -1,7 +1,16 @@
 import pytest
 
 from penwise.diff import Change
-from penwise.lessons import A_AN_NOTE, COMMA_ADDED_NOTE, LABELS, annotate, classify
+from penwise.lessons import (
+    A_AN_NOTE,
+    COMMA_ADDED_NOTE,
+    COMMA_REMOVED_NOTE,
+    GAP_NOTE,
+    LABELS,
+    SPLICE_NOTE,
+    annotate,
+    classify,
+)
 
 
 @pytest.mark.parametrize(
@@ -32,6 +41,7 @@ from penwise.lessons import A_AN_NOTE, COMMA_ADDED_NOTE, LABELS, annotate, class
         ("make a proposal of", "propose", "rephrased"),
         ("图像分割", "image segmentation", "filled"),
         ("[[show very clear]]", "clearly show", "filled"),
+        ("[[?]]", "consistent", "filled"),
     ],
 )
 def test_classify(before, after, category):
@@ -41,6 +51,10 @@ def test_classify(before, after, category):
 def test_specific_notes():
     assert classify("a", "an")[1] == A_AN_NOTE
     assert classify("However", "However,")[1] == COMMA_ADDED_NOTE
+    assert classify("model, is", "model is")[1] == COMMA_REMOVED_NOTE
+    assert classify("works, it", "works; it")[1] == SPLICE_NOTE
+    assert classify("[[?]]", "consistent")[1] == GAP_NOTE
+    assert classify("[[ ? ]]", "express")[1] == GAP_NOTE
 
 
 def test_annotate_sets_label_and_note():

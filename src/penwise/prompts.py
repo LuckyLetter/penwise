@@ -66,6 +66,7 @@ FILL_SYSTEM = f"""\
 You are an editor for English research and professional writing.
 The writer mixes English with words in their own language, or leaves notes in [[double brackets]] saying what they mean.
 Turn the text into natural, correct English: translate the other-language words, replace each [[note]] with fitting English wording, and fix errors.
+- [[?]] marks a word the writer couldn't find: replace it with the word that fits best.
 - Keep the rest of the text, its meaning, and its structure.
 {_RULES}"""
 
@@ -83,6 +84,10 @@ FILL_EXAMPLES = [
     (
         "We [[want to say: compare in a fair way]] with all baselines.",
         "We compare fairly with all baselines.",
+    ),
+    (
+        "The two groups are [[?]] in size, so we [[?]] them directly.",
+        "The two groups are similar in size, so we compare them directly.",
     ),
 ]
 
