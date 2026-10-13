@@ -278,6 +278,11 @@ function obj:_withSelection(callback)
     hs.alert.show("Penwise: command not found at " .. self.bin .. ". Run `penwise setup` again.")
     return
   end
+  -- Without Accessibility permission, Hammerspoon can't read your text or paste the fix.
+  if not hs.accessibilityState(true) then
+    hs.alert.show("Penwise: turn on Hammerspoon in System Settings → Privacy & Security → Accessibility", 6)
+    return
+  end
   self.target = hs.window.focusedWindow()
   self.style = nil -- Improve's tone, when chosen in the panel
   local app = hs.application.frontmostApplication()

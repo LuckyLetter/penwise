@@ -172,6 +172,13 @@ def test_with_nothing_selected_elsewhere_it_asks_for_a_selection(config):
     assert spoon.lua.globals().CLIPBOARD == "user clipboard"
 
 
+def test_without_accessibility_permission_it_says_how_to_turn_it_on(config):
+    spoon = Spoon("stream")
+    spoon.lua.globals().ACCESSIBILITY = False
+    spoon.run('spoon:check("fix")')
+    assert spoon.log == ["alert Penwise: turn on Hammerspoon in System Settings → Privacy & Security → Accessibility"]
+
+
 def test_apps_without_accessibility_text_use_copy(config):
     spoon = Spoon("stream")
     g = spoon.lua.globals()

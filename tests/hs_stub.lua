@@ -147,6 +147,7 @@ hs = {
     secondsSinceEpoch = function() CLOCK = (CLOCK or 0) + 0.1; return CLOCK end,
   },
   focus = function() end,
+  accessibilityState = function() return ACCESSIBILITY ~= false end,
   drawing = { windowLevels = { floating = 3 } },
   webview = {
     new = function() return webview end,
