@@ -400,6 +400,8 @@ function render() {
     main.append(el("div", { class: "error" }, state.error));
     main.append(
       el("div", { class: "status" },
+        el("button", { type: "button", class: "primary", onclick: retry }, "Try again", el("kbd", {}, "↩")),
+        " ",
         el("button", { type: "button", class: "secondary", onclick: () => post({ action: "doctor" }) }, "Check my setup"),
         el("span", { class: "muted" }, "  opens a diagnosis in Terminal"),
       ),
@@ -458,6 +460,10 @@ function replace() {
     before, after, category, context_before, context_after,
   }));
   post({ action: "replace", text: finalText(), changes: accepted });
+}
+
+function retry() {
+  if (state.status === "error" && state.original) post({ action: "retry", mode: state.mode });
 }
 
 function copy() {
@@ -542,7 +548,8 @@ document.addEventListener("keydown", (event) => {
   const selection = String(window.getSelection());
   if (event.key === "Enter") {
     event.preventDefault();
-    replace();
+    if (state.status === "error") retry();
+    else replace();
   } else if (event.key === "Escape") {
     event.preventDefault();
     post({ action: "cancel" });

@@ -94,6 +94,8 @@ def test_explanations_and_errors_are_shown(page):
     send(page, {"type": "error", "message": "Could not reach the model."})
     assert "Could not reach the model." in page.locator("main").inner_text()
     assert page.locator("#replace").is_disabled()
+    page.keyboard.press("Enter")
+    assert sent(page)[-1] == {"action": "retry", "mode": "fix"}
     page.get_by_role("button", name="Check my setup").click()
     assert sent(page)[-1] == {"action": "doctor"}
 

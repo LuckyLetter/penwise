@@ -111,7 +111,7 @@ def test_cancel_leaves_the_text_alone(config):
     assert spoon.log[-1] == "focus target"
 
 
-def test_errors_reach_the_panel(isolated):
+def test_errors_reach_the_panel_and_can_be_retried(server, isolated):
     (isolated / "config.toml").write_text('base_url = "http://127.0.0.1:9/v1"\n')
     spoon = Spoon("stream")
     spoon.run('spoon:check("fix")')
@@ -119,6 +119,12 @@ def test_errors_reach_the_panel(isolated):
     spoon.run_tasks()
     assert spoon.events[-1]["type"] == "error"
     assert "Could not reach" in spoon.events[-1]["message"]
+
+    (isolated / "config.toml").write_text(f'base_url = "{server.url}"\n')  # back online
+    spoon.message({"action": "retry", "mode": "fix"})
+    spoon.run_tasks()
+    assert spoon.events[-1]["type"] == "done"
+    assert spoon.events[-2]["edited"] == "Wait until the information arrive."
 
 
 def test_quick_fix_replaces_right_away(config):
@@ -162,7 +168,7 @@ def test_with_nothing_selected_elsewhere_it_asks_for_a_selection(config):
     spoon.run('spoon:check("fix")')
     spoon.run_tasks()
     assert "cmd+a: user clipboard" not in spoon.log
-    assert spoon.log[-1] == "alert Penwise: select some text first"
+    assert spoon.log[-1] == "alert Penwise: click in a text box, or select the text to check"
     assert spoon.lua.globals().CLIPBOARD == "user clipboard"
 
 

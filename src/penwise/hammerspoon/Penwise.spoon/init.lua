@@ -288,7 +288,7 @@ function obj:_withSelection(callback)
   }
   self:_readSelection(function(text)
     if not text or not text:find("%S") then
-      hs.alert.show("Penwise: select some text first")
+      hs.alert.show("Penwise: click in a text box, or select the text to check")
     elseif #text > 100000 then
       hs.alert.show("Penwise: the selection is too long (over 100,000 characters)")
     else
@@ -573,7 +573,7 @@ function obj:_onMessage(body)
     hs.pasteboard.setContents(body.text)
     self:_close(true)
     hs.alert.show("Copied")
-  elseif body.action == "mode" then
+  elseif body.action == "mode" or body.action == "retry" then
     self:_review(self.text, body.mode)
   elseif body.action == "keep" then
     self.keepTask = hs.task.new(self.bin, nil, concat(self.args, { "keep", "--", body.word }))
