@@ -81,3 +81,13 @@ def test_a_block_from_0_2_gets_the_menu_bar_icon(tmp_path):
     text = init_file.read_text()
     assert text.count("spoon.Penwise:start()") == 1
     assert text.index("spoon.Penwise:start()") < text.index(setup_mac.END)
+
+
+def test_the_practice_note_opens_in_textedit(tmp_path, monkeypatch):
+    opened = []
+    monkeypatch.setattr(setup_mac.subprocess, "run", lambda command, **kwargs: opened.append(command))
+    path = setup_mac.open_practice_note(tmp_path)
+    assert opened == [["open", "-e", str(path)]]
+    note = path.read_text(encoding="utf-8")
+    assert "[[?]]" in note and "[3]" in note
+    assert len(note) <= 2000  # short enough to be checked whole, without selecting

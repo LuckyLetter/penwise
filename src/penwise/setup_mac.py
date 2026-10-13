@@ -118,3 +118,24 @@ def restart_hammerspoon() -> None:
 
 def open_accessibility_settings() -> None:
     subprocess.run(["open", ACCESSIBILITY_SETTINGS], capture_output=True)
+
+
+# A note to try the hotkey on, right after setup: a few typical errors, a citation that
+# stays as it is, a [[?]] gap, and words in another language.
+PRACTICE_NOTE = """\
+Try Penwise here. Click anywhere in this note and press Control+Option+P.
+
+Our method have two advantage. First, it need less data then previous work [3]. \
+Second, the results are [[?]] with our hypothesis, and we 公开了 the code.
+
+Click a change to undo it, and press Return to put the fixed text here.
+"""
+
+
+def open_practice_note(directory: Path) -> Path:
+    """Write the practice note to `directory` and open it in TextEdit."""
+    path = directory / "Try Penwise.txt"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(PRACTICE_NOTE, encoding="utf-8")
+    subprocess.run(["open", "-e", str(path)], capture_output=True)
+    return path

@@ -177,7 +177,9 @@ NOTES = {
 A_AN_NOTE = "Use “an” before a vowel sound (an hour, an LLM, an MRI scan) and “a” before a consonant sound (a user, a one-off, a URL)."
 COMMA_ADDED_NOTE = "A comma usually follows an opening word or phrase (However, In this work,) and goes before and/but/so when they join two full sentences."
 SPLICE_NOTE = "A comma alone can't join two full sentences: use a semicolon or a full stop, or add and/but/so."
-COMMA_REMOVED_NOTE = "No comma between a subject and its verb, or before a “that” clause."
+COMMA_REMOVED_NOTE = (
+    "English uses fewer commas than many languages: none between a subject and its verb, or before a “that” clause."
+)
 HYPHEN_NOTE = (
     "Hyphenate words that together describe a noun that follows them (a well-known method, state-of-the-art results)."
 )

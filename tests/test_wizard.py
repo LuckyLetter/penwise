@@ -51,6 +51,7 @@ def mac(monkeypatch, tmp_path):
     monkeypatch.setattr(setup_mac, "restart_hammerspoon", lambda: done.append("restart"))
     monkeypatch.setattr(setup_mac, "open_accessibility_settings", lambda: done.append("accessibility"))
     monkeypatch.setattr(wizard.webbrowser, "open", lambda url: done.append(f"open {url}"))
+    monkeypatch.setattr(setup_mac, "open_practice_note", lambda directory: done.append("practice note"))
     return done, FakeKeychain(tmp_path, monkeypatch)
 
 
@@ -66,7 +67,7 @@ def openrouter(server, monkeypatch):
 def test_pressing_return_everywhere_gives_a_working_setup(isolated, answers, mac, openrouter, capsys):
     typed, secrets = answers
     done, store = mac
-    typed += ["", "", "", "", "", ""]  # provider, open browser, model, hotkey, accessibility "Return when on"
+    typed += ["", "", "", "", "", ""]  # provider, open browser, model, hotkey, "Return when on", practice note
     secrets.append("sk-or-v1-abc123")
 
     assert wizard.run() == 0
@@ -75,7 +76,7 @@ def test_pressing_return_everywhere_gives_a_working_setup(isolated, answers, mac
     assert (cfg.base_url, cfg.model) == (openrouter.base_url, "mistralai/mistral-small-2603")
     assert cfg.api_key_command == keychain.READ_COMMAND and store.read() == "sk-or-v1-abc123"
     assert cfg.explain is True and cfg.reasoning_effort == ""
-    assert done == [f"open {openrouter.key_url}", "restart", "accessibility"]
+    assert done == [f"open {openrouter.key_url}", "restart", "accessibility", "practice note"]
     assert "spoon.Penwise:bindHotkeys" in (setup_mac.hammerspoon_dir() / "init.lua").read_text()
     out = capsys.readouterr().out
     assert '→ "This sentence has an error."' in out
