@@ -374,11 +374,11 @@ def test_the_panel_opens_above_the_text_field_and_fits_its_content(config):
         {"AXRole": "AXTextArea", "AXSelectedText": "", "AXValue": SELECTION, "AXPosition": field[0], "AXSize": field[1]}
     )
     spoon.run('spoon:check("fix")')
-    assert panel_frame(spoon) == {"x": 100, "y": 800 - 8 - 240, "w": 600, "h": 240}
+    assert panel_frame(spoon) == {"x": 100, "y": 800 - 12 - 240, "w": 600, "h": 240}
 
     # The panel's content needs 300 points; the window adds a 28-point title bar.
     spoon.message({"action": "size", "height": 300, "viewport": 240 - 28})
-    assert panel_frame(spoon) == {"x": 100, "y": 800 - 8 - 328, "w": 600, "h": 328}  # still just above
+    assert panel_frame(spoon) == {"x": 100, "y": 800 - 12 - 328, "w": 600, "h": 328}  # still just above
 
 
 def test_the_panel_opens_below_a_field_at_the_top_of_the_screen(config):
@@ -392,7 +392,7 @@ def test_the_panel_opens_below_a_field_at_the_top_of_the_screen(config):
         }
     )
     spoon.run('spoon:check("fix")')
-    assert panel_frame(spoon) == {"x": 1440 - 480 - 8, "y": 30 + 22 + 8, "w": 480, "h": 240}
+    assert panel_frame(spoon) == {"x": 1440 - 480 - 12, "y": 30 + 22 + 12, "w": 480, "h": 240}
 
 
 def test_in_a_document_the_panel_opens_at_the_selection(config):
@@ -408,7 +408,7 @@ def test_in_a_document_the_panel_opens_at_the_selection(config):
         }
     )
     spoon.run('spoon:check("fix")')
-    assert panel_frame(spoon) == {"x": 300, "y": 400 - 8 - 240, "w": 480, "h": 240}
+    assert panel_frame(spoon) == {"x": 300 + 125 - 240, "y": 400 - 12 - 240, "w": 480, "h": 240}  # centered
 
 
 def utf16(text):
@@ -741,7 +741,7 @@ def test_without_a_known_text_box_the_panel_opens_above_the_mouse_pointer(config
     g.FIELD = spoon.to_lua({"AXRole": "AXTextArea", "AXValue": "", "COPY_ALL": "Wait untill noon."})
     spoon.run('spoon:check("fix")')
     spoon.run_tasks()
-    assert panel_frame(spoon) == {"x": 400 - 24, "y": 820 - 14 - 8 - 240, "w": 480, "h": 240}
+    assert panel_frame(spoon) == {"x": 400 - 240, "y": 820 - 14 - 12 - 240, "w": 480, "h": 240}
 
 
 def test_a_big_text_area_without_a_cursor_position_uses_the_mouse_pointer(config):
@@ -757,7 +757,7 @@ def test_a_big_text_area_without_a_cursor_position_uses_the_mouse_pointer(config
         }
     )
     spoon.run('spoon:check("fix")')
-    assert panel_frame(spoon)["y"] == 500 - 14 - 8 - 240  # not the middle of the screen
+    assert panel_frame(spoon)["y"] == 500 - 14 - 12 - 240  # not the middle of the screen
 
 
 def test_when_the_app_moved_the_keyboard_penwise_clicks_back_in_the_box(config):
@@ -801,7 +801,7 @@ def test_a_tall_text_box_without_room_around_it_puts_the_panel_by_the_cursors_li
         }
     )
     spoon.run('spoon:check("fix")')
-    assert panel_frame(spoon) == {"x": 100, "y": 400 - 8 - 240, "w": 720, "h": 240}
+    assert panel_frame(spoon) == {"x": 12, "y": 400 - 12 - 240, "w": 900, "h": 240}
 
 
 def test_a_panel_too_tall_for_either_side_shrinks_instead_of_covering_the_text(config):
@@ -817,8 +817,8 @@ def test_a_panel_too_tall_for_either_side_shrinks_instead_of_covering_the_text(c
     )
     spoon.run('spoon:check("fix")')
     spoon.message({"action": "size", "height": 600, "viewport": 240})  # a long list of changes
-    # 192 points above the box, 592 below: the bigger side, and the panel scrolls.
-    assert panel_frame(spoon) == {"x": 100, "y": 200 + 100 + 8, "w": 600, "h": 900 - 308}
+    # 188 points above the box, 588 below: the bigger side, and the panel scrolls.
+    assert panel_frame(spoon) == {"x": 100, "y": 200 + 100 + 12, "w": 600, "h": 900 - 312}
 
 
 def test_in_a_terminal_the_panel_goes_above_the_line_you_are_typing(config):
@@ -836,4 +836,26 @@ def test_in_a_terminal_the_panel_goes_above_the_line_you_are_typing(config):
         }
     )
     spoon.run('spoon:check("fix")')
-    assert panel_frame(spoon) == {"x": 20, "y": 700 - 8 - 240, "w": 600, "h": 240}
+    assert panel_frame(spoon) == {"x": 20, "y": 700 - 12 - 240, "w": 600, "h": 240}
+
+
+@pytest.mark.parametrize(
+    "box_x, box_w, panel_x, panel_w",
+    [
+        (300, 600, 300, 600),  # as wide as the box, right above it
+        (300, 300, 300 + 150 - 240, 480),  # a narrow box (a chat): the panel is centered over it
+        (100, 1100, 100 + 550 - 450, 900),  # a wide box: centered, at most 900 wide
+    ],
+)
+def test_the_panel_is_centered_over_the_text_box(config, box_x, box_w, panel_x, panel_w):
+    spoon = Spoon("stream")
+    spoon.lua.globals().FIELD = spoon.to_lua(
+        {
+            "AXRole": "AXTextArea",
+            "AXSelectedText": SELECTION,
+            "AXPosition": {"x": box_x, "y": 700},
+            "AXSize": {"w": box_w, "h": 60},
+        }
+    )
+    spoon.run('spoon:check("fix")')
+    assert panel_frame(spoon) == {"x": panel_x, "y": 700 - 12 - 240, "w": panel_w, "h": 240}
