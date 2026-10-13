@@ -234,6 +234,13 @@ penwise check -m improve -f json < draft.txt                     # everything, a
 Script* with `~/.local/bin/penwise check -f text`, tick *Output replaces selected text*, and give it a shortcut in
 System Settings → Keyboard → Keyboard Shortcuts → Services. You get the corrected text, without the review panel.
 
+## Tested apps
+
+Tested on a Mac with Notes, Visual Studio Code, Claude, Codex, WeChat, Chrome (the address bar and boxes in web
+pages, such as Google's search box) and Terminal (shell commands, and prompts in Claude Code), also with apps in
+full screen. Other apps work the same way when they let other apps read their text boxes; if one doesn't,
+`penwise doctor` shows what the hotkey did there.
+
 ## Limitations
 
 - Each paragraph is checked separately, so the model doesn't see the rest of your document.
