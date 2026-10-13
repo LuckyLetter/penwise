@@ -171,20 +171,27 @@ def check_whole_field(spoon, **app):
 def test_with_nothing_selected_a_short_field_is_checked_whole_and_replaced(config):
     spoon = Spoon("stream")
     check_whole_field(spoon)
-    selected = spoon.lua.globals().FIELD.AXSelectedTextRange  # selected right before the paste
+    # Selected with ⌘A right before the paste, so the fix replaces the text instead of joining it.
+    assert spoon.log[-2:] == ["cmd+a: user clipboard", "cmd+v: Wait until noon, please."]
+
+
+def test_chrome_and_electron_apps_show_the_selection_a_moment_later(config):
+    spoon = Spoon("stream")
+    check_whole_field(spoon, SELECTION_LAG=4)
+    assert spoon.log[-2:] == ["cmd+a: user clipboard", "cmd+v: Wait until noon, please."]
+
+
+def test_when_cmd_a_doesnt_select_accessibility_does(config):
+    spoon = Spoon("stream")
+    check_whole_field(spoon, IGNORES_SELECT_ALL=True)
+    selected = spoon.lua.globals().FIELD.AXSelectedTextRange
     assert (selected.location, selected.length) == (0, len(FIELD_TEXT))
     assert spoon.log[-1] == "cmd+v: Wait until noon, please."
 
 
-def test_apps_that_only_select_with_the_keyboard_get_cmd_a(config):
-    spoon = Spoon("stream")
-    check_whole_field(spoon, IGNORES_AX_SELECTION=True, SELECT_ALL_KEY=True)
-    assert spoon.log[-2:] == ["cmd+a: user clipboard", "cmd+v: Wait until noon, please."]
-
-
 def test_when_the_text_cant_be_selected_the_fix_is_copied_not_pasted_next_to_it(config):
     spoon = Spoon("stream")
-    check_whole_field(spoon, IGNORES_AX_SELECTION=True)
+    check_whole_field(spoon, IGNORES_AX_SELECTION=True, IGNORES_SELECT_ALL=True)
     assert not any(line.startswith("cmd+v") for line in spoon.log)
     assert spoon.log[-1].startswith("alert Penwise: couldn't select your text")
     assert spoon.lua.globals().CLIPBOARD == "Wait until noon, please."
@@ -487,23 +494,68 @@ def test_a_terminal_is_never_read_whole(config):
     spoon.run('spoon:check("fix")')
     spoon.run_tasks()
     assert spoon.events == []  # the commands and output above the prompt are not your text
-    assert spoon.log[-1] == "alert Penwise: click in a text box, or select the text to check"
+    assert spoon.log[-1] == "alert Penwise: in a terminal, select the text to check first"
 
 
-def test_in_a_terminal_a_selection_is_checked_and_the_fix_copied(config):
+def test_in_a_terminal_replace_clears_the_line_you_are_typing_and_pastes_the_fix(config):
     spoon = Spoon("stream")
     g = spoon.lua.globals()
     g.APP_ID = "com.apple.Terminal"
     g.FIELD = spoon.to_lua({"AXRole": "AXTextArea", "AXSelectedText": SELECTION, "AXValue": TERMINAL_TEXT})
     spoon.run('spoon:check("fix")')
     spoon.message({"action": "ready"})
-    assert spoon.events[0]["readonly"] is True  # the panel's button says Copy
-
-    spoon.run("spoon:quickFix()")
     spoon.run_tasks()
-    assert not any(line.startswith("cmd+v") for line in spoon.log)  # a paste would type at the prompt
-    assert g.CLIPBOARD == "Wait until the information arrive."
-    assert "alert Penwise: 2 fixes: Spelling, Uncountable noun, copied: paste it with ⌘V" in spoon.log
+    assert "readonly" not in spoon.events[0]  # the button says Replace
+    spoon.message({"action": "replace", "text": "Wait until the information arrive.", "changes": []})
+    spoon.run_tasks()
+    assert spoon.log[-3:] == [
+        "ctrl+e: user clipboard",  # end of the line
+        "ctrl+u: user clipboard",  # clear it
+        "cmd+v: Wait until the information arrive.",
+    ]
+
+
+def test_in_a_terminal_only_what_you_typed_is_checked(config):
+    spoon = Spoon("stream")
+    g = spoon.lua.globals()
+    g.APP_ID = "com.googlecode.iterm2"
+    claude_code_box = "\n".join(
+        [
+            "╭────────────────────────────╮",
+            "│ > Wait untill the informations   │",
+            "│   arrive.                  │",
+            "╰────────────────────────────╯",
+        ]
+    )
+    g.FIELD = spoon.to_lua({"AXRole": "AXTextArea", "AXSelectedText": claude_code_box})
+    spoon.run('spoon:check("fix")')
+    spoon.message({"action": "ready"})
+    assert spoon.events[0]["original"] == "Wait untill the informations arrive."
+
+
+def test_copy_waits_until_you_let_go_of_the_hotkey(config):
+    spoon = Spoon("stream")
+    g = spoon.lua.globals()
+    g.FIELD = spoon.to_lua({})
+    g.COPY_RESULT = "Wait untill noon."
+    g.HELD_KEYS = 5  # ⌃⌥ still down for a moment: ⌘C now would arrive as ⌃⌥⌘C
+    spoon.run('spoon:check("fix")')
+    spoon.run_tasks()
+    spoon.message({"action": "ready"})
+    assert g.KEY_CHECKS > 5
+    assert spoon.events[0]["original"] == "Wait untill noon."
+
+
+def test_chrome_is_asked_to_build_its_accessibility_tree(config):
+    spoon = Spoon("stream")
+    g = spoon.lua.globals()
+    g.APP_ID = "com.google.Chrome"
+    g.FIELD = spoon.to_lua({})
+    g.ELECTRON_FIELD = spoon.to_lua({"AXRole": "AXTextArea", "AXSelectedText": "", "AXValue": "Wait untill noon."})
+    spoon.run('spoon:check("fix")')
+    spoon.message({"action": "ready"})
+    assert "app AXEnhancedUserInterface = true" in spoon.log
+    assert spoon.events[0]["original"] == "Wait untill noon."
 
 
 def test_text_selected_on_a_web_page_is_copied_not_replaced(config):
@@ -566,11 +618,11 @@ def test_the_log_says_what_happened_without_your_text(config, tmp_path):
     log = log_file.read_text()
     for step in [
         "hotkey in com.apple.TextEdit",
-        "read: whole text box, AXTextField, 25 characters",
+        "read: whole text box, AXTextField, field, 25 characters",
         "panel shown",
         "replace: field",
         "back in the app",
-        "selected the text, pasted the fix",
+        "selected the text (⌘A), pasted the fix",
     ]:
         assert step in log
     assert "untill" not in log and "until" not in log

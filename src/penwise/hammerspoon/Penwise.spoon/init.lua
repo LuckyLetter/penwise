@@ -9,7 +9,7 @@ local obj = {}
 obj.__index = obj
 
 obj.name = "Penwise"
-obj.version = "0.4.1"
+obj.version = "0.4.2"
 obj.author = "LuckyLetter"
 obj.homepage = "https://github.com/LuckyLetter/penwise"
 obj.license = "Apache-2.0 - https://opensource.org/licenses/Apache-2.0"
@@ -53,7 +53,20 @@ local PANEL_WIDTH = 640
 local HAMMERSPOON = "org.hammerspoon.Hammerspoon"
 
 -- Terminals show past commands and output as one big text area, and a paste there types at the
--- prompt instead of replacing anything. So only a selection is checked, and the fix is copied.
+-- prompt instead of replacing anything. So only a selection is checked, and Replace clears the
+-- line you're typing (⌃E ⌃U, which shells and Claude Code understand) before pasting the fix.
+-- Chromium browsers build their accessibility tree for other apps only when asked to.
+local CHROMIUM_BROWSERS = {
+  ["com.google.Chrome"] = true,
+  ["com.google.Chrome.canary"] = true,
+  ["com.microsoft.edgemac"] = true,
+  ["com.brave.Browser"] = true,
+  ["company.thebrowser.Browser"] = true,
+  ["com.vivaldi.Vivaldi"] = true,
+  ["com.operasoftware.Opera"] = true,
+  ["org.chromium.Chromium"] = true,
+}
+
 local TERMINALS = {
   ["com.apple.Terminal"] = true,
   ["com.googlecode.iterm2"] = true,
@@ -291,7 +304,7 @@ end
 function obj:_panelInFront()
   if not (self.webview and self.webview:isVisible()) then return false end
   local front = hs.application.frontmostApplication()
-  return self.panelFocused or (front ~= nil and front:bundleID() == HAMMERSPOON)
+  return front ~= nil and front:bundleID() == HAMMERSPOON
 end
 
 --- Penwise:quickFix()
@@ -320,7 +333,8 @@ function obj:quickFix()
           hs.alert.show("Penwise: " .. summarize(applied) .. ", copied: paste it with ⌘V" .. note, 4)
         else
           self:_replace(event.edited, applied)
-          hs.alert.show("Penwise: " .. summarize(applied) .. "  (⌘Z to undo)" .. note, 3)
+          local undo = self.source.kind == "terminal" and "" or "  (⌘Z to undo)"
+          hs.alert.show("Penwise: " .. summarize(applied) .. undo .. note, 3)
         end
       end
     end)
@@ -353,7 +367,11 @@ function obj:_withSelection(callback)
   self:_log("hotkey in %s%s", (app and app:bundleID()) or "?", self.fullScreen and " (full screen)" or "")
   self:_readSelection(function(text)
     if not text or not text:find("%S") then
-      hs.alert.show("Penwise: click in a text box, or select the text to check")
+      if TERMINALS[app and app:bundleID()] then
+        hs.alert.show("Penwise: in a terminal, select the text to check first")
+      else
+        hs.alert.show("Penwise: click in a text box, or select the text to check")
+      end
     elseif #text > 100000 then
       hs.alert.show("Penwise: the selection is too long (over 100,000 characters)")
     else
@@ -379,6 +397,25 @@ end
 
 local function hasText(value)
   return type(value) == "string" and value:find("%S") ~= nil
+end
+
+-- A selection in a terminal can include the frame Claude Code and other tools draw around their
+-- input box, the prompt, and line breaks where long lines wrap: keep only what you typed.
+local PROMPTS = { "^>%s+", "^❯%s+", "^›%s+", "^%$%s+", "^%%%s+", "^#%s+", "^%S+@%S+ .-[%%%$#]%s+", "^[~/]%S*%s+[%%%$#]%s+" }
+
+local function terminalInput(text)
+  text = text:gsub("\226[\148\149][\128-\191]", "") -- box drawing: ─ │ ╭ ╮ ╰ ╯ …
+  local lines = {}
+  for line in (text .. "\n"):gmatch("(.-)\r?\n") do
+    line = line:match("^%s*(.-)%s*$")
+    if line ~= "" then table.insert(lines, line) end
+  end
+  text = table.concat(lines, " ")
+  for _, prompt in ipairs(PROMPTS) do
+    local rest = text:gsub(prompt, "", 1)
+    if rest ~= text then return rest end
+  end
+  return text
 end
 
 -- macOS counts text in UTF-16 units; Lua strings count bytes (UTF-8).
@@ -460,16 +497,19 @@ end
 
 -- Ask the app for its selected text. With nothing selected, use the whole text field if it
 -- is short, or else the paragraph at the cursor. If the app can't say, copy with ⌘C.
--- `self.source` remembers where the text came from, so Replace can select it again; text that
--- can't be edited there (a terminal, a web page) is "readonly": the fix gets copied instead.
+-- `self.source` remembers where the text came from, so Replace can select it again. In a
+-- terminal only a selection is used; text that can't be edited (a web page) is "readonly".
 function obj:_readSelection(callback, lookedAgain)
   local element = attribute(hs.axuielement.systemWideElement(), "AXFocusedUIElement")
   local bundle = self.app and self.app:bundleID()
-  local readonly = TERMINALS[bundle] or (element ~= nil and not editable(element))
+  local terminal = TERMINALS[bundle] == true
+  local readonly = not terminal and element ~= nil and not editable(element)
   local function use(text, source, how)
+    if terminal then
+      text, source = terminalInput(text), { kind = "terminal" }
+    end
     self.source = source
-    self:_log("read: %s, %s%s, %d characters", how, tostring(element and attribute(element, "AXRole")),
-      readonly and ", read-only" or "", #text)
+    self:_log("read: %s, %s, %d characters", how, source.kind, #text)
     callback(text)
   end
   self.anchor = element and textBounds(element)
@@ -477,47 +517,77 @@ function obj:_readSelection(callback, lookedAgain)
     local selected = attribute(element, "AXSelectedText")
     if hasText(selected) then
       local range = attribute(element, "AXSelectedTextRange")
-      return use(selected, { kind = readonly and "readonly" or "selection", element = element, range = range }, "selection")
+      return use(selected, { kind = readonly and "readonly" or "selection", element = element, range = range },
+        "selection, " .. tostring(attribute(element, "AXRole")))
     end
     local value = attribute(element, "AXValue")
-    if not readonly and self.wholeFieldLimit > 0 and TEXT_FIELD_ROLES[attribute(element, "AXRole")] and hasText(value) then
+    local role = attribute(element, "AXRole")
+    if not terminal and self.wholeFieldLimit > 0 and TEXT_FIELD_ROLES[role] and hasText(value) then
       if #value <= self.wholeFieldLimit then
         self.anchor = frameOf(element) or self.anchor
-        return use(value, { kind = "field", element = element }, "whole text box")
+        return use(value, { kind = "field", element = element }, "whole text box, " .. role)
       end
       local paragraph, range = self:_paragraphAtCursor(element, value)
       if paragraph then
         self.anchor = selectionBounds(element, range) or self.anchor
-        return use(paragraph, { kind = "paragraph", element = element, range = range }, "paragraph at the cursor")
+        return use(paragraph, { kind = "paragraph", element = element, range = range }, "paragraph, " .. role)
       end
     end
   end
-  if not lookedAgain and self.app and not hasText(element and attribute(element, "AXValue")) then
-    -- Electron apps (Claude, Slack, Teams, ...) describe their text boxes to other apps only when
-    -- asked to. Ask, give the app a moment, and look again.
-    local ok, asked = pcall(function()
-      return hs.axuielement.applicationElement(self.app):setAttributeValue("AXManualAccessibility", true)
-    end)
-    if ok and asked then
+  if not lookedAgain and not terminal and self.app and not hasText(element and attribute(element, "AXValue")) then
+    -- Electron apps (Claude, Slack, ...) and Chromium browsers describe their text boxes to other
+    -- apps only when asked to. Ask, give the app a moment, and look again.
+    local asked = false
+    local names = CHROMIUM_BROWSERS[bundle] and { "AXManualAccessibility", "AXEnhancedUserInterface" }
+      or { "AXManualAccessibility" }
+    for _, name in ipairs(names) do
+      local ok, result = pcall(function()
+        return hs.axuielement.applicationElement(self.app):setAttributeValue(name, true)
+      end)
+      asked = asked or (ok and result ~= nil)
+    end
+    if asked then
       self:_log("asked %s to describe its text boxes; looking again", tostring(bundle))
       self.lookAgainTimer = hs.timer.doAfter(0.3, function() self:_readSelection(callback, true) end)
       return
     end
   end
 
-  local saved = hs.pasteboard.readAllData()
-  local count = hs.pasteboard.changeCount()
+  -- Copy the selection. Wait until you let go of the hotkey: with ⌃⌥ still down, ⌘C would
+  -- arrive as ⌃⌥⌘C, and most apps wouldn't copy.
+  self:_whenKeysReleased(function()
+    local saved = hs.pasteboard.readAllData()
+    local count = hs.pasteboard.changeCount()
+    local started = hs.timer.secondsSinceEpoch()
+    hs.eventtap.keyStroke({ "cmd" }, "c", 0)
+    self.copyTimer = hs.timer.doEvery(0.02, function()
+      local copied = hs.pasteboard.changeCount() ~= count
+      if copied or hs.timer.secondsSinceEpoch() - started > 0.5 then
+        self.copyTimer:stop()
+        local text = copied and hs.pasteboard.getContents() or nil
+        restoreClipboard(saved)
+        if not text then
+          self:_log("read: nothing selected to copy")
+          return callback(nil)
+        end
+        use(text, { kind = readonly and "readonly" or "copy" }, "copied with ⌘C")
+      end
+    end)
+  end)
+end
+
+-- Call `fn` once no modifier key is held down (or after a second).
+function obj:_whenKeysReleased(fn)
+  local function held()
+    local keys = hs.eventtap.checkKeyboardModifiers()
+    return keys.ctrl or keys.alt or keys.cmd or keys.shift
+  end
+  if not held() then return fn() end
   local started = hs.timer.secondsSinceEpoch()
-  hs.eventtap.keyStroke({ "cmd" }, "c", 0)
-  self.copyTimer = hs.timer.doEvery(0.02, function()
-    local copied = hs.pasteboard.changeCount() ~= count
-    if copied or hs.timer.secondsSinceEpoch() - started > 0.5 then
-      self.copyTimer:stop()
-      local text = copied and hs.pasteboard.getContents() or nil
-      restoreClipboard(saved)
-      self.source = { kind = readonly and "readonly" or "copy" }
-      self:_log("read: copied with ⌘C, %d characters%s", text and #text or 0, readonly and ", read-only" or "")
-      callback(text)
+  self.keysTimer = hs.timer.doEvery(0.02, function()
+    if not held() or hs.timer.secondsSinceEpoch() - started > 1 then
+      self.keysTimer:stop()
+      fn()
     end
   end)
 end
@@ -719,6 +789,8 @@ function obj:_replace(text, changes)
   if kind == "readonly" then
     hs.pasteboard.setContents(text)
     self:_returnToApp()
+  elseif kind == "terminal" then
+    self:_returnToApp(function() self:_typeIntoTerminal(text) end, function() self:_copyInstead(text) end)
   elseif text ~= self.text then
     self:_returnToApp(function() self:_pasteOver(text) end, function() self:_copyInstead(text) end)
   else
@@ -732,28 +804,81 @@ function obj:_replace(text, changes)
   end
 end
 
+local function paste(text, self)
+  local saved = hs.pasteboard.readAllData()
+  hs.pasteboard.setContents(text)
+  hs.eventtap.keyStroke({ "cmd" }, "v", 0)
+  self.restoreTimer = hs.timer.doAfter(1, function() restoreClipboard(saved) end)
+end
+
+-- Select the text that was checked, make sure it is selected, then paste the fix over it.
+-- Ways to select, in order: for a whole text box ⌘A (every text box knows it), then through
+-- Accessibility; for a paragraph or your selection, whatever is still selected, then through
+-- Accessibility. If none works, the fix is copied instead: pasting would add it next to the text.
 function obj:_pasteOver(text)
-  local function paste()
-    local saved = hs.pasteboard.readAllData()
-    hs.pasteboard.setContents(text)
-    hs.eventtap.keyStroke({ "cmd" }, "v", 0)
-    self.restoreTimer = hs.timer.doAfter(1, function() restoreClipboard(saved) end)
+  local source = self.source or {}
+  local element = source.element
+  if not element then
+    self:_log("pasted the fix over your selection")
+    return paste(text, self)
   end
-  if self:_selectSource() then
-    self:_log("selected the text, pasted the fix")
-    return paste()
+  pcall(function()
+    if attribute(element, "AXFocused") == false then element:setAttributeValue("AXFocused", true) end
+  end)
+  local function selectRange(range)
+    if type(range) == "table" then pcall(function() element:setAttributeValue("AXSelectedTextRange", range) end) end
   end
-  if self.source.kind ~= "field" then return self:_copyInstead(text) end
-  -- Some apps only select through the keyboard.
-  hs.eventtap.keyStroke({ "cmd" }, "a", 0)
-  self.selectTimer = hs.timer.doAfter(0.1, function()
-    local selected = attribute(self.source.element, "AXSelectedText")
-    if selected == nil or sameText(selected, self.text) then
-      self:_log("selected the text with ⌘A, pasted the fix")
-      paste()
-    else
-      self:_copyInstead(text)
+  local ways
+  if source.kind == "field" then
+    ways = {
+      { "⌘A", function() hs.eventtap.keyStroke({ "cmd" }, "a", 0) end },
+      { "Accessibility", function()
+        local value = attribute(element, "AXValue")
+        selectRange({ location = 0, length = utf16Length(type(value) == "string" and value or self.text) })
+      end },
+    }
+  else
+    ways = {
+      { "the selection already there", function() end, 0.15 },
+      { "Accessibility", function() selectRange(source.range) end },
+    }
+  end
+  local function try(n)
+    local way = ways[n]
+    if not way then return self:_copyInstead(text) end
+    way[2]()
+    self:_whenSelected(element, way[3] or 0.6, function(selected)
+      if not selected then return try(n + 1) end
+      self:_log("selected the text (%s), pasted the fix", way[1])
+      paste(text, self)
+    end)
+  end
+  self:_whenKeysReleased(function() try(1) end)
+end
+
+-- Call done(true) once the app shows the checked text as selected, or done(false) after
+-- `seconds`. Apps update this a moment after the selection changes (Chrome, Electron), so it
+-- is checked a few times. An app that can't say what is selected counts as selected.
+function obj:_whenSelected(element, seconds, done)
+  local started = hs.timer.secondsSinceEpoch()
+  if self.verifyTimer then self.verifyTimer:stop() end
+  self.verifyTimer = hs.timer.doEvery(0.05, function()
+    local selected = attribute(element, "AXSelectedText")
+    local ok = selected == nil or sameText(selected, self.text)
+    if ok or hs.timer.secondsSinceEpoch() - started > seconds then
+      self.verifyTimer:stop()
+      done(ok)
     end
+  end)
+end
+
+-- In a terminal: go to the end of the line you're typing, clear it, and paste the fix there.
+function obj:_typeIntoTerminal(text)
+  self:_whenKeysReleased(function()
+    hs.eventtap.keyStroke({ "ctrl" }, "e", 0)
+    hs.eventtap.keyStroke({ "ctrl" }, "u", 0)
+    self:_log("cleared the line in the terminal, pasted the fix")
+    paste(text, self)
   end)
 end
 
@@ -761,26 +886,6 @@ function obj:_copyInstead(text)
   self:_log("couldn't select the text: copied the fix instead")
   hs.pasteboard.setContents(text)
   hs.alert.show("Penwise: couldn't select your text to replace it, so the fix is copied. Select your text and press ⌘V.", 6)
-end
-
--- Select the text that was checked again. True when it is selected (or the app can't tell).
-function obj:_selectSource()
-  local source = self.source or {}
-  local element = source.element
-  if not element then return true end -- copied with ⌘C: the selection is still yours
-  local ok, selected = pcall(function()
-    if attribute(element, "AXFocused") == false then element:setAttributeValue("AXFocused", true) end
-    if sameText(attribute(element, "AXSelectedText"), self.text) then return true end
-    local range = source.range
-    if source.kind == "field" then
-      local value = attribute(element, "AXValue")
-      range = { location = 0, length = utf16Length(type(value) == "string" and value or self.text) }
-    end
-    if type(range) == "table" then element:setAttributeValue("AXSelectedTextRange", range) end
-    local now = attribute(element, "AXSelectedText")
-    return now == nil or sameText(now, self.text)
-  end)
-  return ok and selected
 end
 
 -- Go back to the app being edited. Once it is in front again (Electron apps can take a moment),

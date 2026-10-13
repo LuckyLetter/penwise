@@ -3,7 +3,8 @@
 -- input) and the JSON helpers. COPY_RESULT, if set, is what ⌘C puts on the clipboard, and
 -- FIELD.BOUNDS where the selected text is on screen. PANEL holds the panel's window.
 -- FIELD.IGNORES_AX_SELECTION makes the app ignore selections made through Accessibility, and
--- FIELD.SELECT_ALL_KEY makes ⌘A select the whole field. FRONT_APP is the app in front, when
+-- FIELD.IGNORES_SELECT_ALL makes it ignore ⌘A. HELD_KEYS is how many times the hotkey's
+-- modifiers still read as held down. FRONT_APP is the app in front, when
 -- it isn't the one being edited (APP_ID). FULL_SCREEN puts the app in full screen, FIELD.READONLY
 -- makes the text not editable, and ELECTRON_FIELD is what an Electron app shows once asked to.
 
@@ -89,7 +90,17 @@ local function utf16sub(text, location, length)
 end
 
 local field = {
-  attributeValue = function(_, name) return FIELD[name] end,
+  attributeValue = function(_, name)
+    -- Like Chrome and Electron apps, report a new selection only a few reads later (SELECTION_LAG).
+    if name == "AXSelectedText" and FIELD.PENDING_SELECTION then
+      if (FIELD.SELECTION_LAG or 0) > 0 then
+        FIELD.SELECTION_LAG = FIELD.SELECTION_LAG - 1
+      else
+        FIELD.AXSelectedText, FIELD.PENDING_SELECTION = FIELD.PENDING_SELECTION, nil
+      end
+    end
+    return FIELD[name]
+  end,
   setAttributeValue = function(self, name, value)
     if name == "AXSelectedTextRange" and FIELD.IGNORES_AX_SELECTION then return nil, "unsupported" end
     FIELD[name] = value
@@ -151,13 +162,22 @@ hs = {
     changeCount = function() return COUNT end,
   },
   eventtap = {
-    keyStroke = function(_, key)
-      log("cmd+" .. key .. ": " .. tostring(CLIPBOARD))
-      if key == "c" and COPY_RESULT then
+    keyStroke = function(mods, key)
+      local cmd = mods[1] == "cmd"
+      log(table.concat(mods, "+") .. "+" .. key .. ": " .. tostring(CLIPBOARD))
+      if cmd and key == "c" and COPY_RESULT and (HELD_KEYS or 0) == 0 then
         CLIPBOARD, COUNT = COPY_RESULT, COUNT + 1
-      elseif key == "a" and FIELD.SELECT_ALL_KEY then
-        FIELD.AXSelectedText = FIELD.AXValue
+      elseif cmd and key == "a" and not FIELD.IGNORES_SELECT_ALL then
+        if FIELD.SELECTION_LAG then FIELD.PENDING_SELECTION = FIELD.AXValue else FIELD.AXSelectedText = FIELD.AXValue end
       end
+    end,
+    checkKeyboardModifiers = function()
+      KEY_CHECKS = (KEY_CHECKS or 0) + 1
+      if (HELD_KEYS or 0) > 0 then
+        HELD_KEYS = HELD_KEYS - 1
+        return { ctrl = true, alt = true }
+      end
+      return {}
     end,
   },
   timer = {
