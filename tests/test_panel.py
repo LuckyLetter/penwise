@@ -197,7 +197,7 @@ def test_insights_view(page):
     assert "Use “an” before a vowel sound." in text
     assert "e.g. …results [in] the other hand…" in text
     assert page.locator(".bar").count() == 2
-    assert page.locator("#replace").is_hidden() and page.locator(".modes").is_hidden()
+    assert page.locator("#replace").is_hidden() and page.locator("#modes").is_hidden()
     assert page.locator("#cancel").inner_text().startswith("Close")
 
 
@@ -206,12 +206,14 @@ def test_insights_without_history(page):
     assert "No history yet" in page.locator("main").inner_text()
 
 
-def test_the_tone_is_shown_for_improve(page):
+def test_the_tone_is_shown_for_improve_and_can_be_changed(page):
     send(page, {"type": "begin", "original": "Hi.", "mode": "improve"})
     send(page, {"type": "start", "model": "m", "explain": False, "style": "email"})
-    assert page.locator("#style").inner_text() == "for an email"
+    assert page.locator('#tones [aria-pressed="true"]').inner_text() == "Email"
+    page.get_by_role("button", name="Chat").click()
+    assert sent(page)[-1] == {"action": "style", "style": "chat"}
     send(page, {"type": "begin", "original": "Hi.", "mode": "fix"})
-    assert page.locator("#style").inner_text() == ""
+    assert page.locator("#tones").is_hidden()
 
 
 def test_first_time_tips(page):

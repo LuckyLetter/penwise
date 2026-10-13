@@ -57,6 +57,8 @@
   footer { border-top: 1px solid var(--border); }
   .spacer { flex: 1; }
   .muted { color: var(--muted); font-size: 12px; }
+  #model { min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  @media (max-width: 560px) { #hint { display: none; } }
 
   .modes { display: inline-flex; background: var(--surface); border-radius: 7px; padding: 2px; }
   .modes button {
@@ -142,11 +144,15 @@
 </head>
 <body>
 <header>
-  <div class="modes" role="group" aria-label="Mode">
+  <div class="modes" id="modes" role="group" aria-label="Mode">
     <button type="button" data-mode="fix" title="Only fix errors (Tab to switch)">Fix</button>
     <button type="button" data-mode="improve" title="Also improve clarity and flow (Tab to switch)">Improve</button>
   </div>
-  <span class="muted" id="style"></span>
+  <div class="modes" id="tones" role="group" aria-label="Tone" hidden>
+    <button type="button" data-style="academic" title="Improve for research writing">Research</button>
+    <button type="button" data-style="email" title="Improve for an email">Email</button>
+    <button type="button" data-style="chat" title="Improve for a chat message">Chat</button>
+  </div>
   <span class="spacer"></span>
   <span class="muted" id="model"></span>
 </header>
@@ -376,14 +382,16 @@ function renderInsights(data) {
 }
 
 function render() {
-  document.querySelectorAll(".modes button").forEach((button) => {
+  document.querySelectorAll("[data-mode]").forEach((button) => {
     button.setAttribute("aria-pressed", String(button.dataset.mode === state.mode));
+  });
+  document.querySelectorAll("[data-style]").forEach((button) => {
+    button.setAttribute("aria-pressed", String(button.dataset.style === state.style));
   });
   const took = state.status === "ready" && state.elapsedMs ? ` · ${(state.elapsedMs / 1000).toFixed(1)}s` : "";
   // "mistralai/mistral-small-2603" → "mistral-small-2603"
   document.getElementById("model").textContent = state.model.split("/").pop() + took;
-  const toneLabels = { email: "for an email", chat: "for a chat message" };
-  document.getElementById("style").textContent = (state.mode === "improve" && toneLabels[state.style]) || "";
+  document.getElementById("model").title = state.model;
 
   const main = document.getElementById("main");
   main.className = state.status;
@@ -428,7 +436,9 @@ function render() {
   // Views without text to edit only need a Close button.
   const reading = state.status === "insights" || state.status === "note";
   for (const id of ["replace", "copy"]) document.getElementById(id).hidden = reading;
-  document.querySelector(".modes").hidden = reading;
+  document.getElementById("modes").hidden = reading;
+  // Improve's tone: guessed from the app, one click to change.
+  document.getElementById("tones").hidden = reading || state.mode !== "improve";
   document.getElementById("cancel").firstChild.textContent = reading ? "Close" : "Cancel";
   document.getElementById("hint").textContent = ready && state.changes.length ? "Click a change, or press its number, to undo it." : "";
   if (state.status !== "idle") reportSize();
@@ -452,6 +462,10 @@ function reportSize() {
 
 function setMode(mode) {
   if (mode !== state.mode && state.original && state.status !== "note") post({ action: "mode", mode });
+}
+
+function setStyle(style) {
+  if (style !== state.style && state.original && state.mode === "improve") post({ action: "style", style });
 }
 
 function replace() {
@@ -528,8 +542,11 @@ window.penwise = {
   },
 };
 
-document.querySelectorAll(".modes button").forEach((button) => {
+document.querySelectorAll("[data-mode]").forEach((button) => {
   button.addEventListener("click", () => setMode(button.dataset.mode));
+});
+document.querySelectorAll("[data-style]").forEach((button) => {
+  button.addEventListener("click", () => setStyle(button.dataset.style));
 });
 document.getElementById("cancel").addEventListener("click", () => post({ action: "cancel" }));
 document.getElementById("copy").addEventListener("click", copy);

@@ -109,8 +109,8 @@ shows a timer while it works, and closes by itself when your text needs no chang
 *Improve* adapts to where you're writing: in Mail or Outlook it keeps an email polite and professional; in Slack,
 Teams, Messages or WeChat it stays friendly and natural instead of turning formal; everywhere else it aims for
 research writing. In a browser, the tab title decides (Gmail counts as email, Overleaf as research). The panel shows
-the tone next to the mode. In the terminal, use `penwise check -m improve --style email|chat|academic`. *Fix* only
-corrects errors and keeps your tone everywhere.
+the tone next to the mode; click *Research*, *Email* or *Chat* to change it. In the terminal, use
+`penwise check -m improve --style email|chat|academic`. *Fix* only corrects errors and keeps your tone everywhere.
 
 ### Safe by default
 

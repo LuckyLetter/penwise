@@ -295,6 +295,11 @@ def test_the_app_sets_the_tone(config):
     assert any("--app com.google.Chrome --window Inbox - Gmail" in line for line in spoon.log)
     assert spoon.events[1]["style"] == "email"
 
+    spoon.message({"action": "style", "style": "chat"})  # chosen in the panel
+    spoon.run_tasks()
+    assert spoon.events[-3]["style"] == "chat"
+    assert "--style chat" in spoon.log[-1]
+
 
 def panel_frame(spoon):
     frame = spoon.lua.globals().PANEL.frame

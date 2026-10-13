@@ -279,6 +279,7 @@ function obj:_withSelection(callback)
     return
   end
   self.target = hs.window.focusedWindow()
+  self.style = nil -- Improve's tone, when chosen in the panel
   local app = hs.application.frontmostApplication()
   self.app = app
   -- Where the text is going (an email, a chat) sets the tone of "improve".
@@ -521,6 +522,7 @@ function obj:_run(text, mode, extraArgs, onEvent)
   -- event loop, so input given to a streaming task can be lost when stdin is closed.
   local args = concat(self.args, concat({ "check", "--format", "jsonl", "--mode", mode }, extraArgs))
   args = concat(args, self.context or {})
+  if self.style then args = concat(args, { "--style", self.style }) end
   args = concat(args, { "--", text })
   self.task = hs.task.new(self.bin, function(code, stdout, stderr)
     if run ~= self.run then return end
@@ -575,6 +577,9 @@ function obj:_onMessage(body)
     hs.alert.show("Copied")
   elseif body.action == "mode" or body.action == "retry" then
     self:_review(self.text, body.mode)
+  elseif body.action == "style" then
+    self.style = body.style
+    self:_review(self.text, "improve")
   elseif body.action == "keep" then
     self.keepTask = hs.task.new(self.bin, nil, concat(self.args, { "keep", "--", body.word }))
     self.keepTask:start()
