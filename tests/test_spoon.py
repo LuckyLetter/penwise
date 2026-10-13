@@ -769,3 +769,19 @@ def test_when_the_app_moved_the_keyboard_penwise_clicks_back_in_the_box(config):
     check_whole_field(spoon, other_focus=address_bar, AXPosition={"x": 400, "y": 300}, AXSize={"w": 600, "h": 40})
     assert spoon.log[-3:] == ["click 700,320", "cmd+a: user clipboard", "cmd+v: Wait until noon, please."]
     assert (g.MOUSE.x, g.MOUSE.y) == (10, 10)  # the mouse pointer is put back
+
+
+def test_the_box_itself_counts_as_yours_whatever_text_it_reports(config):
+    spoon = Spoon("stream")
+    g = spoon.lua.globals()
+    g.FIELD = spoon.to_lua({"AXRole": "AXComboBox", "AXSelectedText": "", "AXValue": FIELD_TEXT})
+    spoon.run('spoon:check("fix")')
+    spoon.message({"action": "ready"})
+    spoon.run_tasks()
+    # Google's search box with suggestions open: it reports the highlighted suggestion as its text,
+    # and doesn't report what ⌘A selected.
+    g.FIELD.AXValue = "wait until noon meaning"
+    g.FIELD.IGNORES_SELECT_ALL = True
+    spoon.message({"action": "replace", "text": "Wait until noon, please.", "changes": []})
+    spoon.run_tasks()
+    assert spoon.log[-2:] == ["cmd+a: user clipboard", "cmd+v: Wait until noon, please."]

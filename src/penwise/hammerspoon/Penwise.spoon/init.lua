@@ -9,7 +9,7 @@ local obj = {}
 obj.__index = obj
 
 obj.name = "Penwise"
-obj.version = "0.4.6"
+obj.version = "0.4.7"
 obj.author = "LuckyLetter"
 obj.homepage = "https://github.com/LuckyLetter/penwise"
 obj.license = "Apache-2.0 - https://opensource.org/licenses/Apache-2.0"
@@ -932,7 +932,7 @@ function obj:_pasteOver(text)
     way[2]()
     self:_whenSelected(element, way[3] or 0.6, function(selected)
       if not selected and way[4] then
-        local elsewhere, where = self:_keyboardElsewhere()
+        local elsewhere, where = self:_keyboardElsewhere(element)
         self:_log("⌘A not confirmed by the app; the keyboard is in %s", where)
         selected = not elsewhere
       end
@@ -952,7 +952,7 @@ end
 function obj:_focusBox(element, done)
   pcall(function() element:setAttributeValue("AXFocused", true) end)
   self.focusTimer = hs.timer.doAfter(0.1, function()
-    local elsewhere, where = self:_keyboardElsewhere()
+    local elsewhere, where = self:_keyboardElsewhere(element)
     if not elsewhere then return done() end
     local box = frameOf(element)
     if not box then
@@ -984,10 +984,13 @@ function obj:_whenSelected(element, seconds, done)
 end
 
 -- Whether the keyboard is in a different text box (one that doesn't hold the checked text).
--- Also says where the keyboard is, for the log.
-function obj:_keyboardElsewhere()
+-- Whether the keyboard is in a text box other than `box`, the one Penwise read. The box itself
+-- counts as yours whatever text it reports (a search box with suggestions open can report the
+-- highlighted suggestion), and so does a box holding your text. Also says where, for the log.
+function obj:_keyboardElsewhere(box)
   local focused = attribute(hs.axuielement.systemWideElement(), "AXFocusedUIElement")
   if not focused then return false, "nothing the app reports" end
+  if box and focused == box then return false, "the text box" end
   local role, value = attribute(focused, "AXRole"), attribute(focused, "AXValue")
   local elsewhere = TEXT_FIELD_ROLES[role] == true and type(value) == "string" and not sameText(value, self.text)
   local holds = type(value) == "string" and string.format(" holding %d characters", #value) or ""
