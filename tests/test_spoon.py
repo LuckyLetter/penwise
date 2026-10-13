@@ -785,3 +785,55 @@ def test_the_box_itself_counts_as_yours_whatever_text_it_reports(config):
     spoon.message({"action": "replace", "text": "Wait until noon, please.", "changes": []})
     spoon.run_tasks()
     assert spoon.log[-2:] == ["cmd+a: user clipboard", "cmd+v: Wait until noon, please."]
+
+
+def test_a_tall_text_box_without_room_around_it_puts_the_panel_by_the_cursors_line(config):
+    spoon = Spoon("stream")
+    spoon.lua.globals().FIELD = spoon.to_lua(
+        {
+            "AXRole": "AXTextArea",
+            "AXSelectedText": "",
+            "AXValue": FIELD_TEXT,
+            "AXSelectedTextRange": {"location": 5, "length": 0},
+            "AXPosition": {"x": 100, "y": 150},
+            "AXSize": {"w": 1000, "h": 600},  # an email body: no room above or below it
+            "BOUNDS": {"x": 100, "y": 400, "w": 0, "h": 20},
+        }
+    )
+    spoon.run('spoon:check("fix")')
+    assert panel_frame(spoon) == {"x": 100, "y": 400 - 8 - 240, "w": 720, "h": 240}
+
+
+def test_a_panel_too_tall_for_either_side_shrinks_instead_of_covering_the_text(config):
+    spoon = Spoon("stream")
+    spoon.lua.globals().FIELD = spoon.to_lua(
+        {
+            "AXRole": "AXTextArea",
+            "AXSelectedText": "",
+            "AXValue": FIELD_TEXT,
+            "AXPosition": {"x": 100, "y": 200},
+            "AXSize": {"w": 600, "h": 100},
+        }
+    )
+    spoon.run('spoon:check("fix")')
+    spoon.message({"action": "size", "height": 600, "viewport": 240})  # a long list of changes
+    # 192 points above the box, 592 below: the bigger side, and the panel scrolls.
+    assert panel_frame(spoon) == {"x": 100, "y": 200 + 100 + 8, "w": 600, "h": 900 - 308}
+
+
+def test_in_a_terminal_the_panel_goes_above_the_line_you_are_typing(config):
+    spoon = Spoon("stream")
+    g = spoon.lua.globals()
+    g.APP_ID = "com.apple.Terminal"
+    g.FIELD = spoon.to_lua(
+        {
+            "AXRole": "AXTextArea",
+            "AXSelectedText": "",
+            "AXValue": TERMINAL_TEXT + "echo 'Wait untill noon'",
+            "AXPosition": {"x": 0, "y": 0},
+            "AXSize": {"w": 1440, "h": 880},
+            "BOUNDS": {"x": 20, "y": 700, "w": 600, "h": 18},
+        }
+    )
+    spoon.run('spoon:check("fix")')
+    assert panel_frame(spoon) == {"x": 20, "y": 700 - 8 - 240, "w": 600, "h": 240}

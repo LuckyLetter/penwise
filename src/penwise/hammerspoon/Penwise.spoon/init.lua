@@ -9,7 +9,7 @@ local obj = {}
 obj.__index = obj
 
 obj.name = "Penwise"
-obj.version = "0.4.7"
+obj.version = "0.4.8"
 obj.author = "LuckyLetter"
 obj.homepage = "https://github.com/LuckyLetter/penwise"
 obj.license = "Apache-2.0 - https://opensource.org/licenses/Apache-2.0"
@@ -254,7 +254,7 @@ function obj:showInsights()
   self.target = hs.window.focusedWindow()
   self.app = hs.application.frontmostApplication() -- to go back to when you close it
   self.fullScreen = self.target ~= nil and self.target:isFullScreen() == true
-  self.anchor = nil
+  self.anchors = nil
   self:_showPanel()
   self:_send(hs.json.encode({ type = "note", title = "Your recurring fixes", text = "Loading…" }))
   self.insightsTask = hs.task.new(self.bin, function(_, stdout, stderr)
@@ -426,24 +426,36 @@ end
 -- With nothing selected in a terminal: what you're typing, at the bottom of the window. That is
 -- the input box of Claude Code or Codex (a line starting with > ❯ › or ▌, and the lines
 -- under it up to the box's edge), or else the last line: the shell's command line.
+-- Returns the text, and its first and last byte in `buffer` (to put the panel above it).
 local function terminalTyping(buffer)
-  buffer = buffer:sub(-20000) -- the end of a long scrollback is enough
-  local lines = {}
-  for line in (buffer .. "\n"):gmatch("(.-)\r?\n") do table.insert(lines, line) end
+  -- The end of a long scrollback is enough: the lines of its last 20,000 bytes.
+  local lines, starts = {}, {}
+  local position = 1
+  if #buffer > 20000 then position = (buffer:find("\n", #buffer - 20000, true) or #buffer) + 1 end
+  while position <= #buffer do
+    local newline = buffer:find("\n", position, true) or #buffer + 1
+    table.insert(lines, (buffer:sub(position, newline - 1):gsub("\r$", "")))
+    table.insert(starts, position)
+    position = newline + 1
+  end
   local last = #lines
   while last > 0 and not lines[last]:find("%S") do last = last - 1 end
+  if last == 0 then return "" end
+  local first, final = last, last
   for i = last, math.max(1, last - 12), -1 do
     local plain = lines[i]:gsub(BOX, "")
     if plain:find("^%s*>%s") or plain:find("^%s*❯%s") or plain:find("^%s*›%s") or plain:find("^%s*▌") then
-      local block = { lines[i] }
+      first, final = i, i
       for j = i + 1, last do
         if isBorder(lines[j]) or not lines[j]:gsub(BOX, ""):find("%S") then break end
-        table.insert(block, lines[j])
+        final = j
       end
-      return table.concat(block, "\n")
+      break
     end
   end
-  return lines[last]
+  local block = {}
+  for i = first, final do table.insert(block, lines[i]) end
+  return table.concat(block, "\n"), starts[first], starts[final] + #lines[final] - 1
 end
 
 local function terminalInput(text)
@@ -531,21 +543,31 @@ local function sameText(a, b)
   return type(a) == "string" and type(b) == "string" and squeeze(a) == squeeze(b)
 end
 
--- Where to put the panel: just above the text box; in a big text area (a document), above the
--- selected text or the cursor's line; in an app that doesn't say where its text box is (WeChat),
--- above the mouse pointer, as you most likely just clicked in the box.
-function obj:_anchorFor(element, range)
+-- Where the panel may go, best first: next to the text being checked, so you can compare,
+-- without covering it. That is the whole text box when it's checked whole; the paragraph, your
+-- selection, or the line you're typing in a terminal; then a small text box; the cursor's line;
+-- and in an app that doesn't say where its text is (WeChat), the mouse pointer, as you most
+-- likely just clicked there. Returns the places, and the first one's name for the log.
+function obj:_anchorsFor(element, kind, range)
+  local places, names = {}, {}
+  local function add(place, name)
+    if place then
+      table.insert(places, place)
+      table.insert(names, name)
+    end
+  end
   local frame = element and frameOf(element)
-  if frame and frame.h <= 200 then return frame, "the text box" end
-  local text = element and selectionBounds(element, range)
-  if text then return text, "the text" end
+  if kind == "field" then add(frame, "the text box") end
+  if range then add(element and selectionBounds(element, range), "the text") end
+  if frame and frame.h <= 200 then add(frame, "the text box") end
+  add(element and selectionBounds(element), "the cursor's line")
   local mouse = hs.mouse.absolutePosition()
   local window = self.target and self.target:frame()
   if mouse and window and mouse.x >= window.x and mouse.x <= window.x + window.w
     and mouse.y >= window.y and mouse.y <= window.y + window.h then
-    return { x = mouse.x - 24, y = mouse.y - 14, w = 0, h = 28 }, "the mouse pointer"
+    add({ x = mouse.x - 24, y = mouse.y - 14, w = 0, h = 28 }, "the mouse pointer")
   end
-  return nil, "the middle of the screen"
+  return places, names[1] or "the middle of the screen"
 end
 
 -- Roles of things that aren't text: with nothing selected there, Penwise doesn't select all.
@@ -562,16 +584,16 @@ function obj:_readSelection(callback, lookedAgain)
   local terminal = TERMINALS[bundle] == true
   local role = element and attribute(element, "AXRole")
   local readonly = not terminal and element ~= nil and not editable(element)
-  local where -- where the panel goes, for the log
-  local function use(text, source, how)
+  local function use(text, source, how, range)
     if terminal then
       text, source = terminalInput(text), { kind = "terminal" }
     end
     self.source = source
-    self:_log("read: %s, %s, %s, %d characters; panel above %s", how, tostring(role), source.kind, #text, where)
+    local where
+    self.anchors, where = self:_anchorsFor(element, source.kind, range or source.range)
+    self:_log("read: %s, %s, %s, %d characters; panel by %s", how, tostring(role), source.kind, #text, where)
     callback(text)
   end
-  self.anchor, where = self:_anchorFor(element)
   if element then
     local selected = attribute(element, "AXSelectedText")
     if hasText(selected) then
@@ -580,7 +602,14 @@ function obj:_readSelection(callback, lookedAgain)
     end
     local value = attribute(element, "AXValue")
     if terminal and hasText(value) then
-      return use(terminalTyping(value), {}, "what you're typing")
+      local typed, first, last = terminalTyping(value)
+      local range
+      if first then
+        pcall(function()
+          range = { location = utf16Length(value:sub(1, first - 1)), length = utf16Length(value:sub(first, last)) }
+        end)
+      end
+      return use(typed, {}, "what you're typing", range)
     end
     if not terminal and self.wholeFieldLimit > 0 and TEXT_FIELD_ROLES[role] and hasText(value) then
       if #value <= self.wholeFieldLimit then
@@ -588,7 +617,6 @@ function obj:_readSelection(callback, lookedAgain)
       end
       local paragraph, range = self:_paragraphAtCursor(element, value)
       if paragraph then
-        self.anchor, where = self:_anchorFor(element, range)
         return use(paragraph, { kind = "paragraph", element = element, range = range }, "paragraph")
       end
     end
@@ -684,20 +712,30 @@ function obj:_paragraphAtCursor(element, value)
   if ok and text then return text, range end
 end
 
--- Where the panel goes: just above the text, below it when there is no room above, or
--- else in the middle of the screen.
-local function placePanel(anchor, size, area)
-  local gap = 8
-  if anchor then
-    local x = math.max(area.x + gap, math.min(anchor.x, area.x + area.w - size.w - gap))
-    if anchor.y - gap - size.h >= area.y then
-      return { x = x, y = anchor.y - gap - size.h }
-    end
-    if anchor.y + anchor.h + gap + size.h <= area.y + area.h then
-      return { x = x, y = anchor.y + anchor.h + gap }
+-- Where the panel goes: just above a place, or just below it when there is no room above, at
+-- full size if possible, or else shrunk to the bigger side (it scrolls) rather than covering the
+-- text. In the middle of the screen only when no place has room.
+local GAP, MIN_HEIGHT = 8, 150
+
+local function placePanel(places, size, area)
+  local function at(place, shrink)
+    local x = math.max(area.x + GAP, math.min(place.x, area.x + area.w - size.w - GAP))
+    local above = place.y - GAP - area.y
+    local below = area.y + area.h - (place.y + place.h + GAP)
+    if size.h <= above then return { x = x, y = place.y - GAP - size.h, h = size.h } end
+    if size.h <= below then return { x = x, y = place.y + place.h + GAP, h = size.h } end
+    if shrink and math.max(above, below) >= MIN_HEIGHT then
+      if above >= below then return { x = x, y = area.y, h = above } end
+      return { x = x, y = place.y + place.h + GAP, h = below }
     end
   end
-  return { x = area.x + (area.w - size.w) / 2, y = area.y + (area.h - size.h) / 3 }
+  for _, shrink in ipairs({ false, true }) do
+    for _, place in ipairs(places) do
+      local spot = at(place, shrink)
+      if spot then return spot end
+    end
+  end
+  return { x = area.x + (area.w - size.w) / 2, y = area.y + (area.h - size.h) / 3, h = size.h }
 end
 
 function obj:_showPanel()
@@ -754,10 +792,11 @@ end
 function obj:_placePanel()
   local screen = (self.target and self.target:screen()) or hs.screen.mainScreen()
   local area = screen:frame()
-  local width = self.anchor and math.max(480, math.min(720, self.anchor.w)) or PANEL_WIDTH
-  local size = { w = width, h = math.max(150, math.min(area.h * 0.7, self.panelHeight)) }
-  local spot = placePanel(self.anchor, size, area)
-  self.webview:frame({ x = spot.x, y = spot.y, w = size.w, h = size.h })
+  local places = self.anchors or {}
+  local width = places[1] and math.max(480, math.min(720, places[1].w)) or PANEL_WIDTH
+  local size = { w = width, h = math.max(MIN_HEIGHT, math.min(area.h * 0.7, self.panelHeight)) }
+  local spot = placePanel(places, size, area)
+  self.webview:frame({ x = spot.x, y = spot.y, w = size.w, h = spot.h })
 end
 
 -- Check the text and stream the results into the review panel.
