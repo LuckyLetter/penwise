@@ -151,15 +151,55 @@ def test_quick_fix_says_when_there_is_nothing_to_fix(config):
     assert not any(line.startswith("cmd+v") for line in spoon.log)
 
 
-def test_with_nothing_selected_a_short_field_is_checked_whole(config):
-    spoon = Spoon("stream")
-    field = "Wait untill noon, please."
-    spoon.lua.globals().FIELD = spoon.to_lua({"AXRole": "AXTextField", "AXSelectedText": "", "AXValue": field})
+FIELD_TEXT = "Wait untill noon, please."
+
+
+def check_whole_field(spoon, **app):
+    """Check a text field with nothing selected, then press Replace."""
+    spoon.lua.globals().FIELD = spoon.to_lua(
+        {"AXRole": "AXTextField", "AXSelectedText": "", "AXValue": FIELD_TEXT, **app}
+    )
     spoon.run('spoon:check("fix")')
     spoon.message({"action": "ready"})
     spoon.run_tasks()
-    assert spoon.log[0] == "cmd+a: user clipboard"  # the whole field gets selected, so the paste replaces it
-    assert spoon.events[0]["original"] == field
+    assert spoon.events[0]["original"] == FIELD_TEXT
+    assert not any(line.startswith("cmd+") for line in spoon.log)  # nothing selected while you review
+    spoon.message({"action": "replace", "text": "Wait until noon, please.", "changes": []})
+    spoon.run_tasks()
+
+
+def test_with_nothing_selected_a_short_field_is_checked_whole_and_replaced(config):
+    spoon = Spoon("stream")
+    check_whole_field(spoon)
+    selected = spoon.lua.globals().FIELD.AXSelectedTextRange  # selected right before the paste
+    assert (selected.location, selected.length) == (0, len(FIELD_TEXT))
+    assert spoon.log[-1] == "cmd+v: Wait until noon, please."
+
+
+def test_apps_that_only_select_with_the_keyboard_get_cmd_a(config):
+    spoon = Spoon("stream")
+    check_whole_field(spoon, IGNORES_AX_SELECTION=True, SELECT_ALL_KEY=True)
+    assert spoon.log[-2:] == ["cmd+a: user clipboard", "cmd+v: Wait until noon, please."]
+
+
+def test_when_the_text_cant_be_selected_the_fix_is_copied_not_pasted_next_to_it(config):
+    spoon = Spoon("stream")
+    check_whole_field(spoon, IGNORES_AX_SELECTION=True)
+    assert not any(line.startswith("cmd+v") for line in spoon.log)
+    assert spoon.log[-1].startswith("alert Penwise: couldn't select your text")
+    assert spoon.lua.globals().CLIPBOARD == "Wait until noon, please."
+
+
+def test_when_the_app_doesnt_come_back_the_fix_is_copied(config):
+    spoon = Spoon("stream")
+    spoon.run('spoon:check("fix")')
+    spoon.message({"action": "ready"})
+    spoon.run_tasks()
+    spoon.lua.globals().FRONT_APP = "org.hammerspoon.Hammerspoon"  # the app never returns to the front
+    spoon.message({"action": "replace", "text": "Wait until the information arrive.", "changes": []})
+    spoon.run_tasks()
+    assert not any(line.startswith("cmd+v") for line in spoon.log)
+    assert spoon.log[-1].startswith("alert Penwise: couldn't select your text")
 
 
 def test_with_nothing_selected_elsewhere_it_asks_for_a_selection(config):
@@ -373,8 +413,11 @@ def check_at_cursor(spoon, value, cursor):
     )
     spoon.run('spoon:check("fix")')
     spoon.message({"action": "ready"})
+    original = spoon.events[0]["original"]
+    spoon.message({"action": "replace", "text": original.replace("have", "has"), "changes": []})
+    spoon.run_tasks()
     selected = spoon.lua.globals().FIELD.AXSelectedTextRange
-    return spoon.events[0]["original"], (selected.location, selected.length)
+    return original, (selected.location, selected.length)
 
 
 def test_with_nothing_selected_in_a_long_field_the_paragraph_at_the_cursor_is_checked(config):
@@ -384,9 +427,9 @@ def test_with_nothing_selected_in_a_long_field_the_paragraph_at_the_cursor_is_ch
     value = f"First paragraph is fine.\n\n{paragraph}\n\n  Third one, which is also fine."
     original, selected = check_at_cursor(spoon, value, value.index("paragraph have"))
     assert original == paragraph
-    # Selected (in UTF-16 units, like macOS counts), so that Replace puts the fix there.
+    # Selected when replacing (in UTF-16 units, like macOS counts), so the fix goes in its place.
     assert selected == (utf16(value[: value.index(paragraph)]), utf16(paragraph))
-    assert not any(line.startswith("cmd+") for line in spoon.log)
+    assert [line for line in spoon.log if line.startswith("cmd+")] == ["cmd+v: " + paragraph.replace("have", "has")]
 
 
 def test_without_blank_lines_the_line_at_the_cursor_is_checked(config):
@@ -395,3 +438,31 @@ def test_without_blank_lines_the_line_at_the_cursor_is_checked(config):
     value = "Line one is here.\nLine two have a eror.\nLine three."
     original, _ = check_at_cursor(spoon, value, value.index("eror") + 4)  # at the end of the line
     assert original == "Line two have a eror."
+
+
+def test_the_panel_shows_on_every_space_and_over_full_screen_apps(config):
+    spoon = Spoon("stream")
+    spoon.run('spoon:check("fix")')
+    assert spoon.lua.globals().PANEL.behavior == 1 | 256  # canJoinAllSpaces, fullScreenAuxiliary
+
+
+def test_clicking_elsewhere_closes_the_panel(config):
+    spoon = Spoon("stream")
+    spoon.run('spoon:check("fix")')
+    spoon.message({"action": "ready"})
+    spoon.run('WINDOW_CALLBACK("focusChange", nil, false)')
+    assert spoon.log[-1] == "hide panel"  # and focus stays where you clicked
+    assert not spoon.lua.globals().PANEL.visible
+
+
+def test_the_hotkey_in_another_app_checks_that_apps_text(config):
+    spoon = Spoon("stream")
+    spoon.run('spoon:check("fix")')
+    spoon.message({"action": "ready"})
+    spoon.lua.globals().FIELD = spoon.to_lua({"AXRole": "AXTextArea", "AXSelectedText": "Other text have a eror."})
+    spoon.run('spoon:check("fix")')  # the panel is still open, but you're in an app
+    assert spoon.events[-1] == {"type": "begin", "original": "Other text have a eror.", "mode": "fix"}
+
+    spoon.lua.globals().FRONT_APP = "org.hammerspoon.Hammerspoon"  # in the panel: switch the mode
+    spoon.run('spoon:check("improve")')
+    assert spoon.events[-1] == {"type": "begin", "original": "Other text have a eror.", "mode": "improve"}

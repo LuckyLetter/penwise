@@ -2,6 +2,9 @@
 -- Tests set SPOON_DIR, FIELD (the focused element's AX attributes), run_command(path, args,
 -- input) and the JSON helpers. COPY_RESULT, if set, is what ⌘C puts on the clipboard, and
 -- FIELD.BOUNDS where the selected text is on screen. PANEL holds the panel's window.
+-- FIELD.IGNORES_AX_SELECTION makes the app ignore selections made through Accessibility, and
+-- FIELD.SELECT_ALL_KEY makes ⌘A select the whole field. FRONT_APP is the app in front, when
+-- it isn't the one being edited (APP_ID).
 
 LOG, JS = {}, {}
 CLIPBOARD, COUNT = "user clipboard", 1
@@ -17,9 +20,11 @@ TARGET = {
 
 PANEL = { visible = false, frame = { x = 0, y = 0, w = 640, h = 560 } }
 local webview = {}
-for _, name in ipairs({ "windowStyle", "windowTitle", "allowTextEntry", "level", "windowCallback", "html" }) do
+for _, name in ipairs({ "windowStyle", "windowTitle", "allowTextEntry", "level", "html" }) do
   webview[name] = function(self) return self end
 end
+function webview:behavior(value) PANEL.behavior = value; return self end
+function webview:windowCallback(fn) WINDOW_CALLBACK = fn; return self end
 function webview:show() PANEL.visible = true; return self end
 function webview:hide() log("hide panel"); PANEL.visible = false; return self end
 function webview:isVisible() return PANEL.visible end
@@ -82,11 +87,13 @@ end
 
 local field = {
   attributeValue = function(_, name) return FIELD[name] end,
-  setAttributeValue = function(_, name, value)
+  setAttributeValue = function(self, name, value)
+    if name == "AXSelectedTextRange" and FIELD.IGNORES_AX_SELECTION then return nil, "unsupported" end
     FIELD[name] = value
     if name == "AXSelectedTextRange" then
       FIELD.AXSelectedText = utf16sub(FIELD.AXValue, value.location, value.length)
     end
+    return self
   end,
   parameterizedAttributeValue = function(_, name) return name == "AXBoundsForRange" and FIELD.BOUNDS or nil end,
 }
@@ -106,7 +113,12 @@ hs = {
   window = { focusedWindow = function() return TARGET end },
   application = {
     frontmostApplication = function()
-      return { bundleID = function() return APP_ID or "com.apple.TextEdit" end }
+      local id = FRONT_APP or APP_ID or "com.apple.TextEdit"
+      return {
+        bundleID = function() return id end,
+        pid = function() return id == "org.hammerspoon.Hammerspoon" and 1 or 42 end,
+        activate = function() end,
+      }
     end,
   },
   screen = { mainScreen = function() return screen end },
@@ -131,6 +143,8 @@ hs = {
       log("cmd+" .. key .. ": " .. tostring(CLIPBOARD))
       if key == "c" and COPY_RESULT then
         CLIPBOARD, COUNT = COPY_RESULT, COUNT + 1
+      elseif key == "a" and FIELD.SELECT_ALL_KEY then
+        FIELD.AXSelectedText = FIELD.AXValue
       end
     end,
   },
@@ -148,7 +162,7 @@ hs = {
   },
   focus = function() end,
   accessibilityState = function() return ACCESSIBILITY ~= false end,
-  drawing = { windowLevels = { floating = 3 } },
+  drawing = { windowLevels = { floating = 3 }, windowBehaviors = { canJoinAllSpaces = 1, fullScreenAuxiliary = 256 } },
   webview = {
     new = function() return webview end,
     usercontent = { new = function() return { setCallback = function(_, fn) SEND_MESSAGE = fn end } end },

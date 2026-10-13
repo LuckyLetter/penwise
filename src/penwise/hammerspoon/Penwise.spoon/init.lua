@@ -44,6 +44,7 @@ obj.checkForUpdates = true
 obj.logger = hs.logger.new("Penwise")
 
 local PANEL_WIDTH = 640
+local HAMMERSPOON = "org.hammerspoon.Hammerspoon"
 
 local spoonPath = hs.spoons.scriptPath()
 
@@ -239,10 +240,13 @@ end
 --- Method
 --- Reads the selected text in the frontmost app and opens the review panel.
 function obj:check(mode)
-  if self.webview and self.webview:isVisible() then
+  -- In the panel itself, the hotkey switches the mode. From an app, it checks that app's text.
+  local front = hs.application.frontmostApplication()
+  if self.webview and self.webview:isVisible() and front and front:bundleID() == HAMMERSPOON then
     self:_review(self.text, mode)
     return
   end
+  self:_close()
   self:_withSelection(function(text)
     self:_showPanel()
     self:_review(text, mode)
@@ -377,11 +381,18 @@ local function frameOf(element)
   end
 end
 
-local function selectionBounds(element)
-  local range = attribute(element, "AXSelectedTextRange")
+-- Where the text in `range` is on screen (by default, the selected text).
+local function selectionBounds(element, range)
+  range = range or attribute(element, "AXSelectedTextRange")
   if type(range) ~= "table" then return nil end
   local ok, bounds = pcall(function() return element:parameterizedAttributeValue("AXBoundsForRange", range) end)
   if ok and type(bounds) == "table" then return rect(bounds.x, bounds.y, bounds.w, bounds.h) end
+end
+
+-- The same text, give or take spacing and line breaks (apps report those differently).
+local function sameText(a, b)
+  local function squeeze(text) return (text:gsub("%s+", " "):gsub("^ ", ""):gsub(" $", "")) end
+  return type(a) == "string" and type(b) == "string" and squeeze(a) == squeeze(b)
 end
 
 -- Where the text is on screen: the text field, or in a large one (a document), the selection.
@@ -393,26 +404,30 @@ end
 
 -- Ask the app for its selected text. With nothing selected, use the whole text field if it
 -- is short, or else the paragraph at the cursor. If the app can't say, copy with ⌘C.
+-- `self.source` remembers where the text came from, so Replace can select it again.
 function obj:_readSelection(callback)
   local element = attribute(hs.axuielement.systemWideElement(), "AXFocusedUIElement")
   self.anchor = element and textBounds(element)
+  self.source = { kind = "copy" }
   if element then
     local selected = attribute(element, "AXSelectedText")
     if hasText(selected) then
+      self.source = { kind = "selection", element = element, range = attribute(element, "AXSelectedTextRange") }
       callback(selected)
       return
     end
     local value = attribute(element, "AXValue")
     if self.wholeFieldLimit > 0 and TEXT_FIELD_ROLES[attribute(element, "AXRole")] and hasText(value) then
       if #value <= self.wholeFieldLimit then
-        hs.eventtap.keyStroke({ "cmd" }, "a", 0)
+        self.source = { kind = "field", element = element }
         self.anchor = frameOf(element) or self.anchor
         callback(value)
         return
       end
-      local paragraph = self:_selectParagraph(element, value)
+      local paragraph, range = self:_paragraphAtCursor(element, value)
       if paragraph then
-        self.anchor = selectionBounds(element) or self.anchor
+        self.source = { kind = "paragraph", element = element, range = range }
+        self.anchor = selectionBounds(element, range) or self.anchor
         callback(paragraph)
         return
       end
@@ -439,21 +454,18 @@ function obj:_readSelection(callback)
   end)
 end
 
--- Select the paragraph at the cursor, so that Replace puts the fix there. Returns its text,
--- or nil when the app doesn't let Penwise select it.
-function obj:_selectParagraph(element, value)
-  local ok, paragraph = pcall(function()
+-- The paragraph at the cursor: its text and its range (in UTF-16 units, as macOS counts).
+function obj:_paragraphAtCursor(element, value)
+  local ok, text, range = pcall(function()
     local cursor = attribute(element, "AXSelectedTextRange")
     local units = type(cursor) == "table" and (cursor.location or cursor.loc)
     if not units then return nil end
     local first, last = paragraphAt(value, byteIndex(value, units), self.wholeFieldLimit)
     if not first then return nil end
     local text = value:sub(first, last)
-    local range = { location = utf16Length(value:sub(1, first - 1)), length = utf16Length(text) }
-    element:setAttributeValue("AXSelectedTextRange", range)
-    if attribute(element, "AXSelectedText") == text then return text end
+    return text, { location = utf16Length(value:sub(1, first - 1)), length = utf16Length(text) }
   end)
-  return ok and paragraph or nil
+  if ok and text then return text, range end
 end
 
 -- Where the panel goes: just above the text, below it when there is no room above, or
@@ -482,8 +494,15 @@ function obj:_showPanel()
       :windowTitle("Penwise")
       :allowTextEntry(true)
       :level(hs.drawing.windowLevels.floating)
-      :windowCallback(function(action)
-        if action == "closing" then self:_close(true) end
+      -- Show on the current Space, also over apps in full screen.
+      :behavior(hs.drawing.windowBehaviors.canJoinAllSpaces | hs.drawing.windowBehaviors.fullScreenAuxiliary)
+      :windowCallback(function(action, _, hasFocus)
+        if action == "closing" then
+          self:_close()
+          self:_returnToApp()
+        elseif action == "focusChange" and not hasFocus and self.webview:isVisible() then
+          self:_close() -- you clicked somewhere else: get out of the way
+        end
       end)
       :html(self.html)
   end
@@ -585,7 +604,8 @@ function obj:_onMessage(body)
     self:_replace(body.text, body.changes or {})
   elseif body.action == "copy" then
     hs.pasteboard.setContents(body.text)
-    self:_close(true)
+    self:_close()
+    self:_returnToApp()
     hs.alert.show("Copied")
   elseif body.action == "mode" or body.action == "retry" then
     self:_review(self.text, body.mode)
@@ -596,23 +616,23 @@ function obj:_onMessage(body)
     self.keepTask = hs.task.new(self.bin, nil, concat(self.args, { "keep", "--", body.word }))
     self.keepTask:start()
   elseif body.action == "doctor" then
-    self:_close(false)
+    self:_close()
     self:_openInTerminal("doctor")
   elseif body.action == "cancel" then
-    self:_close(true)
+    self:_close()
+    self:_returnToApp()
   end
 end
 
--- Paste the accepted text over the original selection, then put the clipboard back.
+-- Put the accepted text in place of the original: back in the app, select the text that was
+-- checked and paste over it. If it can't be selected, copy the fix instead: pasting then would
+-- add it next to the original.
 function obj:_replace(text, changes)
-  self:_close(true)
+  self:_close()
   if text ~= self.text then
-    self.pasteTimer = hs.timer.doAfter(0.15, function()
-      local saved = hs.pasteboard.readAllData()
-      hs.pasteboard.setContents(text)
-      hs.eventtap.keyStroke({ "cmd" }, "v", 0)
-      self.restoreTimer = hs.timer.doAfter(0.5, function() restoreClipboard(saved) end)
-    end)
+    self:_returnToApp(function() self:_pasteOver(text) end, function() self:_copyInstead(text) end)
+  else
+    self:_returnToApp()
   end
   if #changes > 0 then
     -- As an argument, like the text in _run: input written to stdin can be lost.
@@ -622,11 +642,74 @@ function obj:_replace(text, changes)
   end
 end
 
-function obj:_close(refocus)
-  self.run = self.run + 1 -- ignore output from a check that is still running
+function obj:_pasteOver(text)
+  local function paste()
+    local saved = hs.pasteboard.readAllData()
+    hs.pasteboard.setContents(text)
+    hs.eventtap.keyStroke({ "cmd" }, "v", 0)
+    self.restoreTimer = hs.timer.doAfter(1, function() restoreClipboard(saved) end)
+  end
+  if self:_selectSource() then return paste() end
+  if self.source.kind ~= "field" then return self:_copyInstead(text) end
+  -- Some apps only select through the keyboard.
+  hs.eventtap.keyStroke({ "cmd" }, "a", 0)
+  self.selectTimer = hs.timer.doAfter(0.1, function()
+    local selected = attribute(self.source.element, "AXSelectedText")
+    if selected == nil or sameText(selected, self.text) then paste() else self:_copyInstead(text) end
+  end)
+end
+
+function obj:_copyInstead(text)
+  hs.pasteboard.setContents(text)
+  hs.alert.show("Penwise: couldn't select your text to replace it, so the fix is copied. Select your text and press ⌘V.", 6)
+end
+
+-- Select the text that was checked again. True when it is selected (or the app can't tell).
+function obj:_selectSource()
+  local source = self.source or {}
+  local element = source.element
+  if not element then return true end -- copied with ⌘C: the selection is still yours
+  local ok, selected = pcall(function()
+    if attribute(element, "AXFocused") == false then element:setAttributeValue("AXFocused", true) end
+    if sameText(attribute(element, "AXSelectedText"), self.text) then return true end
+    local range = source.range
+    if source.kind == "field" then
+      local value = attribute(element, "AXValue")
+      range = { location = 0, length = utf16Length(type(value) == "string" and value or self.text) }
+    end
+    if type(range) == "table" then element:setAttributeValue("AXSelectedTextRange", range) end
+    local now = attribute(element, "AXSelectedText")
+    return now == nil or sameText(now, self.text)
+  end)
+  return ok and selected
+end
+
+-- Go back to the app being edited. Once it is in front again (Electron apps can take a moment),
+-- call `fn`; if it doesn't come back within 2 seconds, call `fallback` instead.
+function obj:_returnToApp(fn, fallback)
+  if self.app then self.app:activate() end
+  if self.target then self.target:focus() end
+  if not fn then return end
+  local started = hs.timer.secondsSinceEpoch()
+  if self.returnTimer then self.returnTimer:stop() end
+  self.returnTimer = hs.timer.doEvery(0.05, function()
+    local front = hs.application.frontmostApplication()
+    local back = not self.app or (front ~= nil and front:pid() == self.app:pid())
+    if back or hs.timer.secondsSinceEpoch() - started > 2 then
+      self.returnTimer:stop()
+      -- A moment more for the app to give the keyboard back to its text box.
+      self.settleTimer = hs.timer.doAfter(0.1, function()
+        if back then fn() elseif fallback then fallback() end
+      end)
+    end
+  end)
+end
+
+-- Hide the panel and ignore a check that is still running.
+function obj:_close()
+  self.run = self.run + 1
   if self.task and self.task:isRunning() then self.task:terminate() end
   if self.webview then self.webview:hide() end
-  if refocus and self.target then self.target:focus() end
 end
 
 return obj

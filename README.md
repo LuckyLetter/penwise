@@ -242,7 +242,8 @@ System Settings → Keyboard → Keyboard Shortcuts → Services. You get the co
 - Each paragraph is checked separately, so the model doesn't see the rest of your document.
 - LaTeX, Markdown and citations are usually kept as they are, but small models occasionally touch them. Check the
   changes on technical text.
-- A few apps don't allow reading or pasting text this way. Use ⌘C in the panel and paste yourself.
+- A few apps don't allow reading or selecting text this way. When Penwise can't select your original text to
+  replace it, it doesn't paste next to it: it copies the fix and tells you, so you can select the text and press ⌘V.
 
 ## Development
 
