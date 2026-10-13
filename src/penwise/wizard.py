@@ -49,11 +49,8 @@ def run() -> int:
     hotkey = platform.system() == "Darwin" and confirm("\nSet up the hotkey that works in every app?")
     if hotkey and setup_hotkey():
         print(
-            "\nAll set! Select text in any app, then press:\n"
-            "  ⌃⌥P   review the fixes (Control+Option+P)\n"
-            "  ⌃⌥⇧P  also improve clarity and flow\n"
-            "  ⌃⌥⌘P  quick fix: replace right away, no review\n"
-            "With nothing selected, Penwise checks the whole text box, or the paragraph at the cursor."
+            "\nAll set! Click in any text box and press ⌃⌥P (Control+Option+P).\n"
+            "Return puts the fix in; Esc closes. (⌃⌥⇧P also improves the flow; ⌃⌥⌘P fixes without asking.)"
         )
         if confirm("Try it now on a practice note?"):
             setup_mac.open_practice_note(config.config_path().parent)

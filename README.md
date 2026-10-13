@@ -1,7 +1,7 @@
 # Penwise
 
-Select text in any app on your Mac, press **⌃⌥P**, and see what's wrong with your English, with a short
-explanation of each change. Keep the changes you agree with, press **Return**, and your text is replaced.
+Click in any text box on your Mac and press **⌃⌥P**. Penwise shows what's wrong with your English, with a short
+explanation of each change. Press **Return**, and your text is fixed.
 
 Penwise is made for research and professional writing by non-native speakers. It aims to teach as well as correct:
 every change comes with a short note, and the fixes you make again and again show up in `penwise insights`.
@@ -79,31 +79,28 @@ Three design rules keep it trustworthy:
    short list, tests it, and installs the hotkey (it can install [Hammerspoon](https://www.hammerspoon.org) for you
    with Homebrew). Press Return to take the suggested answer at every step.
 
-3. **Use it.** Select text in any app and press:
+3. **Use it.** Click in any text box and press **⌃⌥P** (Control+Option+P). Look over the changes, then press
+   **Return** to put the fix in, or **Esc** to close. That's all you need to know.
 
-   | Hotkey | What it does |
-   | ------ | ------------ |
-   | **⌃⌥P**  (Control+Option+P)       | review the fixes, each with a short note, then press Return to replace |
-   | **⌃⌥⇧P** (Control+Option+Shift+P) | the same, and also improve clarity and flow |
-   | **⌃⌥⌘P** (Control+Option+Command+P) | quick fix: replace right away, with a one-line summary |
+When you want more:
 
-| In the review panel |                                   |
-| ------------------- | --------------------------------- |
-| click / 1–9         | undo or redo a single change      |
-| Return              | replace your text with the fix    |
-| ⌘C                  | copy the result instead           |
-| Tab                 | switch between Fix and Improve    |
-| Esc                 | close without changing anything   |
+| Key | What it does |
+| --- | ------------ |
+| click a change, or 1–9 | undo or redo that change |
+| Tab | switch between *Fix* and *Improve* (clarity and flow) |
+| ⌘C | copy the result instead of replacing |
+| **⌃⌥⇧P** | open straight in *Improve* |
+| **⌃⌥⌘P** | quick fix: replace right away, with a one-line summary |
 
 Prefer clicking? The **✎ icon in the menu bar** has the same three actions, plus *Your recurring fixes*,
-*Try it on a practice note* (handy for showing a colleague; also `penwise try`), *Change model or API key*, and
+*Try it on a practice note* (handy for showing a colleague; also `penwise try`), *Settings* (model and API key), and
 *Check my setup*.
 
 **You rarely need to select anything.** With nothing selected, Penwise reads the text straight from the app: in a
 short text box (a message, a comment, up to 2,000 characters) it takes the whole box; in a longer document, the
-paragraph your cursor is in. The panel opens right above your text (or below, if there's no room), sized to fit,
-shows a timer while it works, and closes by itself when your text needs no changes. To change the hotkeys, edit the Penwise block in `~/.hammerspoon/init.lua`; running
-`penwise setup` again keeps your changes.
+paragraph your cursor is in. Select text to check just that. The panel opens right above your text, sized to fit,
+and closes by itself when your text needs no changes, or when you click elsewhere. To change the hotkeys, edit the
+Penwise block in `~/.hammerspoon/init.lua`; running `penwise setup` again keeps your changes.
 
 ### The right tone, automatically
 

@@ -20,7 +20,7 @@ TARGET = {
 
 PANEL = { visible = false, frame = { x = 0, y = 0, w = 640, h = 560 } }
 local webview = {}
-for _, name in ipairs({ "windowStyle", "windowTitle", "allowTextEntry", "level", "html" }) do
+for _, name in ipairs({ "windowStyle", "transparent", "shadow", "windowTitle", "allowTextEntry", "level", "html" }) do
   webview[name] = function(self) return self end
 end
 function webview:behavior(value) PANEL.behavior = value; return self end

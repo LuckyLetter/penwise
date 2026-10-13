@@ -93,7 +93,7 @@ def test_explanations_and_errors_are_shown(page):
 
     send(page, {"type": "error", "message": "Could not reach the model."})
     assert "Could not reach the model." in page.locator("main").inner_text()
-    assert page.locator("#replace").is_disabled()
+    assert page.locator("#primary").inner_text().startswith("Try again")  # the one button: what comes next
     page.keyboard.press("Enter")
     assert sent(page)[-1] == {"action": "retry", "mode": "fix"}
     page.get_by_role("button", name="Check my setup").click()
@@ -145,8 +145,9 @@ def test_a_note_shows_plain_text(page):
     assert page.locator("h2").text_content() == "Your recurring fixes"
     assert page.locator("pre").inner_text() == "3× in → on"
     page.keyboard.press("Tab")
+    assert sent(page) == [{"action": "ready"}]  # no mode switch
     page.keyboard.press("Enter")
-    assert sent(page) == [{"action": "ready"}]  # no mode switch, nothing to replace
+    assert sent(page)[-1] == {"action": "cancel"}  # Done
 
 
 def test_risky_changes_start_unapplied(page):
@@ -197,8 +198,8 @@ def test_insights_view(page):
     assert "Use “an” before a vowel sound." in text
     assert "e.g. …results [in] the other hand…" in text
     assert page.locator(".bar").count() == 2
-    assert page.locator("#replace").is_hidden() and page.locator("#modes").is_hidden()
-    assert page.locator("#cancel").inner_text().startswith("Close")
+    assert page.locator("#modes").is_hidden()
+    assert page.locator("#primary").inner_text().startswith("Done")
 
 
 def test_insights_without_history(page):
@@ -220,7 +221,7 @@ def test_first_time_tips(page):
     send(page, {"type": "begin", "original": "a eror", "mode": "fix"})
     send(page, {"type": "start", "model": "m", "explain": False, "tips": True})
     send(page, check_result("a eror", "an error"))
-    assert "New here? Click a change to undo it" in page.locator(".tips").inner_text()
+    assert "Click a change to undo it" in page.locator(".tips").inner_text()
     send(page, {"type": "begin", "original": "a eror", "mode": "fix"})
     send(page, {"type": "start", "model": "m", "explain": False, "tips": False})
     send(page, check_result("a eror", "an error"))
@@ -233,3 +234,24 @@ def test_the_panel_asks_for_a_window_that_fits(page):
     assert 120 < short < 260
     send(page, check_result("a eror", "an error"))
     assert sizes(page)[-1] > short  # the list of changes needs more room
+
+
+def test_one_button_does_what_comes_next(page):
+    send(page, {"type": "begin", "original": "a eror", "mode": "fix"})
+    assert page.locator("footer button").count() == 1
+    assert page.locator("#primary").is_disabled()  # still checking
+    send(page, check_result("a eror", "an error"))
+    assert page.locator("#primary").inner_text().startswith("Replace")
+    page.locator("#primary").click()
+    assert sent(page)[-1]["action"] == "replace"
+
+    send(page, {"type": "begin", "original": "All good.", "mode": "fix"})
+    send(page, check_result("All good.", "All good."))
+    assert page.locator("#primary").inner_text().startswith("Done")
+
+
+def test_a_note_is_shown_once_for_changes_of_the_same_kind(page):
+    send(page, {"type": "begin", "original": "She have two dataset.", "mode": "fix"})
+    send(page, check_result("She have two dataset.", "She has two datasets."))
+    assert page.locator("li").count() == 2
+    assert page.locator("li .note").count() == 1  # both are "Word form"

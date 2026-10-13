@@ -257,7 +257,7 @@ def test_the_menu_bar_offers_every_action_with_its_hotkey(config):
         "-",
         "Your recurring fixes…",
         "Try it on a practice note",
-        "Change model or API key…",
+        "Settings…",
         "Check my setup…",
     ]
     click(spoon, "Quick fix")
@@ -280,7 +280,7 @@ def test_the_menu_shows_your_recurring_fixes(config):
 def test_the_menu_opens_setup_in_terminal(config):
     spoon = Spoon("stream")
     spoon.run("spoon:start()")
-    click(spoon, "Change model or API key")
+    click(spoon, "Settings")
     (script,) = [line for line in spoon.log if line.startswith("applescript")]
     assert 'tell application "Terminal"' in script
     assert script.rstrip().endswith('-m penwise setup"\nend tell')

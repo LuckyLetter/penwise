@@ -192,7 +192,7 @@ function obj:_menuItems()
     { title = "-" },
     { title = "Your recurring fixes…", fn = function() self:showInsights() end },
     { title = "Try it on a practice note", fn = function() self:_runQuietly("try") end },
-    { title = "Change model or API key…", fn = function() self:_openInTerminal("setup") end },
+    { title = "Settings…", fn = function() self:_openInTerminal("setup") end },
     { title = "Check my setup…", fn = function() self:_openInTerminal("doctor") end },
   }) do
     table.insert(items, item)
@@ -491,8 +491,11 @@ function obj:_showPanel()
     local content = hs.webview.usercontent.new("penwise")
     content:setCallback(function(message) self:_onMessage(message.body) end)
     self.ready = false
+    -- A popover: no title bar; the page draws the rounded panel on a transparent window.
     self.webview = hs.webview.new({ x = 0, y = 0, w = PANEL_WIDTH, h = self.panelHeight }, {}, content)
-      :windowStyle({ "titled", "closable", "resizable" })
+      :windowStyle({ "borderless" })
+      :transparent(true)
+      :shadow(true)
       :windowTitle("Penwise")
       :allowTextEntry(true)
       :level(hs.drawing.windowLevels.floating)
