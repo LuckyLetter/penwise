@@ -188,3 +188,12 @@ def test_improve_takes_its_tone_from_the_app(server, isolated, monkeypatch, caps
     assert "The text is an email" in server.requests[-1]["messages"][0]["content"]
     _, out, _ = run([*args, "--style", "chat"], monkeypatch, capsys)
     assert json.loads(out.splitlines()[0])["style"] == "chat"
+
+
+def test_tips_are_shown_to_new_users_only(server, isolated, monkeypatch, capsys):
+    args = ["check", "This have a error.", "--base-url", server.url, "-f", "jsonl"]
+    _, out, _ = run(args, monkeypatch, capsys)
+    assert json.loads(out.splitlines()[0])["tips"] is True
+    history.record([{"before": "a", "after": "an", "category": "article"}] * 3)
+    _, out, _ = run(args, monkeypatch, capsys)
+    assert json.loads(out.splitlines()[0])["tips"] is False

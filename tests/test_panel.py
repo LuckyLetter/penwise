@@ -206,3 +206,14 @@ def test_the_tone_is_shown_for_improve(page):
     assert page.locator("#style").inner_text() == "for an email"
     send(page, {"type": "begin", "original": "Hi.", "mode": "fix"})
     assert page.locator("#style").inner_text() == ""
+
+
+def test_first_time_tips(page):
+    send(page, {"type": "begin", "original": "a eror", "mode": "fix"})
+    send(page, {"type": "start", "model": "m", "explain": False, "tips": True})
+    send(page, check_result("a eror", "an error"))
+    assert "New here? Click a change to undo it" in page.locator(".tips").inner_text()
+    send(page, {"type": "begin", "original": "a eror", "mode": "fix"})
+    send(page, {"type": "start", "model": "m", "explain": False, "tips": False})
+    send(page, check_result("a eror", "an error"))
+    assert page.locator(".tips").count() == 0

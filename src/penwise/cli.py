@@ -140,7 +140,8 @@ def cmd_check(args: argparse.Namespace) -> int:
             print(json.dumps(event), flush=True)
 
     style = args.style or presets.style_for(args.app, args.window)
-    emit({"type": "start", "mode": mode, "model": cfg.model, "explain": explain, "style": style})
+    new_here = cfg.history and len(history.load()) < 3  # show the panel's first-time tips
+    emit({"type": "start", "mode": mode, "model": cfg.model, "explain": explain, "style": style, "tips": new_here})
     client = ChatClient.from_config(cfg)
     result = engine.check(
         text,

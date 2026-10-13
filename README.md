@@ -9,6 +9,18 @@ every change comes with a short note, and the fixes you make again and again sho
 It works with a cloud model you have an API key for, or a small local model (such as a 1B model on an M1 Mac).
 Setup is one command that asks a few questions and does the rest.
 
+**What it does**
+
+- **Fixes your English anywhere on your Mac.** Select text, press **⌃⌥P**, review the changes, press Return.
+- **Teaches as it fixes.** Every change has a label (Articles, Prepositions, Word form, …) and a short rule;
+  *Your recurring fixes* shows what you get wrong most often.
+- **Fills in what you can't say yet.** Write a phrase in your own language or as `[[your idea]]`, and Penwise
+  writes it in English.
+- **Safe and in your control.** It never changes numbers, citations, acronyms, math, code or links on its own; you
+  can undo any single change; with a local model nothing leaves your Mac.
+- **Simple to set up and keep current.** `penwise setup` asks a few questions and does the rest; the ✎ menu bar
+  icon tells you when an update is available.
+
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="docs/panel-dark.png">
   <img src="docs/panel-light.png" width="640" alt="The Penwise review panel: the text with each change marked, and a list of the changes with a label and a short note for each.">

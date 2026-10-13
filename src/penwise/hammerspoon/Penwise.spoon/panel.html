@@ -92,6 +92,7 @@
   .change.undone { text-decoration: underline dotted var(--muted); text-underline-offset: 3px; }
   .change.active { outline: 2px solid var(--accent); outline-offset: 1px; }
 
+  .tips { margin: 0 0 12px; padding: 8px 12px; border-radius: 8px; background: var(--surface); font-size: 13px; color: var(--muted); }
   .banner { margin: 0 0 12px; padding: 8px 12px; border-radius: 8px; background: var(--warn-bg); color: var(--warn-text); }
   .good { margin-top: 12px; color: var(--ins); font-weight: 500; }
   .insight { display: grid; grid-template-columns: 1fr auto; gap: 2px 12px; padding: 8px 0; border-bottom: 1px solid var(--border); }
@@ -187,6 +188,7 @@ const state = {
   insights: null,
   explain: false,
   style: "academic",
+  tips: false,
   explaining: false,
   startedAt: 0,
   elapsedMs: 0,
@@ -403,6 +405,11 @@ function render() {
       ),
     );
   } else if (state.status === "ready") {
+    if (state.tips && state.changes.length) {
+      main.append(el("div", { class: "tips" },
+        "New here? Click a change to undo it, press Return to replace your text. ",
+        "Not sure how to say something? Write it in your own language or [[like this]]."));
+    }
     for (const warning of state.warnings) main.append(el("div", { class: "banner" }, warning));
     main.append(renderText());
     if (state.changes.length) {
@@ -458,6 +465,7 @@ window.penwise = {
       case "start":
         state.model = event.model;
         state.style = event.style || "academic";
+        state.tips = Boolean(event.tips);
         state.explain = Boolean(event.explain);
         break;
       case "result":
