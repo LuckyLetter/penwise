@@ -199,13 +199,17 @@ end
 --- Shows the fixes you make most often, in the Penwise panel.
 function obj:showInsights()
   self.target = hs.window.focusedWindow()
-  local title = "Your recurring fixes"
   self:_showPanel()
-  self:_send(hs.json.encode({ type = "note", title = title, text = "Loading…" }))
+  self:_send(hs.json.encode({ type = "note", title = "Your recurring fixes", text = "Loading…" }))
   self.insightsTask = hs.task.new(self.bin, function(_, stdout, stderr)
-    local text = (stdout and stdout:find("%S")) and stdout or (stderr or "")
-    self:_send(hs.json.encode({ type = "note", title = title, text = text }))
-  end, concat(self.args, { "insights" }))
+    local ok, data = pcall(hs.json.decode, stdout or "")
+    if ok and type(data) == "table" then
+      data.type = "insights"
+      self:_send(hs.json.encode(data))
+    else
+      self:_send(hs.json.encode({ type = "note", title = "Your recurring fixes", text = stderr or "" }))
+    end
+  end, concat(self.args, { "insights", "--json" }))
   self.insightsTask:start()
 end
 

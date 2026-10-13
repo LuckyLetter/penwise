@@ -94,6 +94,10 @@
 
   .banner { margin: 0 0 12px; padding: 8px 12px; border-radius: 8px; background: var(--warn-bg); color: var(--warn-text); }
   .good { margin-top: 12px; color: var(--ins); font-weight: 500; }
+  .insight { display: grid; grid-template-columns: 1fr auto; gap: 2px 12px; padding: 8px 0; border-bottom: 1px solid var(--border); }
+  .insight .count { color: var(--muted); font-variant-numeric: tabular-nums; }
+  .insight .bar { grid-column: 1 / 3; height: 4px; border-radius: 2px; background: var(--accent); opacity: 0.55; }
+  .insight .note, .insight .example { grid-column: 1 / 3; font-size: 13px; color: var(--muted); }
   .note-text { margin: 0; white-space: pre-wrap; font: 13px/1.55 ui-monospace, "SF Mono", Menlo, monospace; -webkit-user-select: text; user-select: text; }
   .error { color: var(--del); }
 
@@ -131,6 +135,7 @@
   button.primary { border: 0; background: var(--accent); color: var(--accent-text); }
   button.secondary { border: 1px solid var(--border); background: var(--bg); color: var(--text); }
   button:disabled { opacity: 0.4; cursor: default; }
+  [hidden] { display: none !important; }
   kbd { font: inherit; font-size: 11px; opacity: 0.75; margin-left: 6px; }
 </style>
 </head>
@@ -167,7 +172,7 @@ function post(message) {
 }
 
 const state = {
-  status: "idle", // idle | loading | ready | error | note
+  status: "idle", // idle | loading | ready | error | note | insights
   original: "",
   mode: "fix",
   model: "",
@@ -178,6 +183,7 @@ const state = {
   warnings: [],
   error: "",
   note: { title: "", text: "" },
+  insights: null,
   explain: false,
   explaining: false,
   startedAt: 0,
@@ -331,6 +337,40 @@ function renderChanges() {
   return list;
 }
 
+// "Your recurring fixes": what you fix most, the rule for each, and fixes you keep repeating.
+function renderInsights(data) {
+  const parts = [el("h2", {}, "Your recurring fixes")];
+  if (!data.total) {
+    parts.push(el("div", { class: "muted" }, "No history yet. Accept some changes, and your patterns will show up here."));
+    return parts;
+  }
+  parts.push(el("div", { class: "muted" }, `${data.total} changes you accepted since ${data.since}`));
+  const most = Math.max(...data.categories.map((c) => c.count));
+  for (const category of data.categories) {
+    parts.push(
+      el("div", { class: "insight" },
+        el("strong", {}, category.label),
+        el("span", { class: "count" }, `${category.count}×`),
+        el("div", { class: "bar", style: `width: ${Math.max(4, (100 * category.count) / most)}%` }),
+        category.note && el("span", { class: "note" }, category.note),
+      ),
+    );
+  }
+  if (data.repeated.length) {
+    parts.push(el("h2", {}, "Fixes you've made more than once"));
+    for (const item of data.repeated) {
+      parts.push(
+        el("div", { class: "insight" },
+          el("strong", {}, item.pair),
+          el("span", { class: "count" }, `${item.count}×`),
+          item.example && el("span", { class: "example" }, `e.g. …${item.example}…`),
+        ),
+      );
+    }
+  }
+  return parts;
+}
+
 function render() {
   document.querySelectorAll(".modes button").forEach((button) => {
     button.setAttribute("aria-pressed", String(button.dataset.mode === state.mode));
@@ -346,6 +386,8 @@ function render() {
   if (state.status === "loading") {
     main.append(el("div", { class: "text" }, state.original));
     main.append(el("div", { class: "status muted pulse", id: "progress" }, progressText()));
+  } else if (state.status === "insights") {
+    main.append(...renderInsights(state.insights));
   } else if (state.status === "note") {
     main.append(el("h2", {}, state.note.title), el("pre", { class: "note-text" }, state.note.text));
   } else if (state.status === "error") {
@@ -370,6 +412,11 @@ function render() {
   const ready = state.status === "ready";
   document.getElementById("replace").disabled = !ready;
   document.getElementById("copy").disabled = !ready;
+  // Views without text to edit only need a Close button.
+  const reading = state.status === "insights" || state.status === "note";
+  for (const id of ["replace", "copy"]) document.getElementById(id).hidden = reading;
+  document.querySelector(".modes").hidden = reading;
+  document.getElementById("cancel").firstChild.textContent = reading ? "Close" : "Cancel";
   document.getElementById("hint").textContent = ready && state.changes.length ? "Click a change, or press its number, to undo it." : "";
 }
 
@@ -427,6 +474,10 @@ window.penwise = {
         break;
       case "done":
         state.explaining = false;
+        break;
+      case "insights":
+        stopTimers();
+        Object.assign(state, { status: "insights", original: "", insights: event });
         break;
       case "note":
         stopTimers();

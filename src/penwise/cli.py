@@ -11,7 +11,7 @@ import time
 
 from penwise import __version__, config, engine, history, presets, render, setup_mac, updater, wizard
 from penwise.config import ConfigError
-from penwise.lessons import LABELS
+from penwise.lessons import LABELS, NOTES
 from penwise.llm import ChatClient, LLMError
 
 FORMATS = ("pretty", "text", "json", "jsonl")
@@ -86,6 +86,7 @@ def build_parser() -> argparse.ArgumentParser:
 
     p = sub.add_parser("insights", help="show the fixes you make most often")
     p.add_argument("-n", "--limit", type=int, default=8, help="how many items to show (default: 8)")
+    p.add_argument("--json", action="store_true", help="answer in JSON (used by the menu bar icon)")
     p.set_defaults(run=cmd_insights)
 
     p = sub.add_parser("history", help="show where your history is kept, or clear it")
@@ -229,6 +230,21 @@ def cmd_keep(args: argparse.Namespace) -> int:
 
 def cmd_insights(args: argparse.Namespace) -> int:
     data = history.insights(limit=args.limit)
+    if args.json:
+        print(
+            json.dumps(
+                {
+                    "total": data["total"],
+                    "since": (data["first"] or "")[:10],
+                    "categories": [
+                        {"label": LABELS.get(c, c), "count": n, "note": NOTES.get(c, "")} for c, n in data["categories"]
+                    ],
+                    "repeated": [{"pair": pair, "count": n, "example": ex} for pair, n, ex in data["repeated"]],
+                },
+                ensure_ascii=False,
+            )
+        )
+        return 0
     if not data["total"]:
         print("No history yet. Accept some changes in the panel, and your patterns will show up here.")
         return 0

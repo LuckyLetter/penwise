@@ -169,3 +169,13 @@ def test_update_check(isolated, monkeypatch, capsys):
     monkeypatch.setattr(cli.updater, "check", lambda: None)
     _, out, _ = run(["update", "--check"], monkeypatch, capsys)
     assert "up to date" in out
+
+
+def test_insights_as_json(isolated, monkeypatch, capsys):
+    history.record([{"before": "in", "after": "on", "category": "preposition", "context_before": "results "}] * 2)
+    _, out, _ = run(["insights", "--json"], monkeypatch, capsys)
+    data = json.loads(out)
+    assert data["total"] == 2
+    assert data["categories"][0]["label"] == "Prepositions"
+    assert "learn them in phrases" in data["categories"][0]["note"]
+    assert data["repeated"][0]["pair"] == "in → on"

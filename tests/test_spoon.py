@@ -221,9 +221,9 @@ def test_the_menu_shows_your_recurring_fixes(config):
     click(spoon, "Your recurring fixes")
     spoon.message({"action": "ready"})
     spoon.run_tasks()
-    note = spoon.events[-1]
-    assert note["type"] == "note" and note["title"] == "Your recurring fixes"
-    assert "in → on" in note["text"]
+    insights = spoon.events[-1]
+    assert insights["type"] == "insights" and insights["total"] == 2
+    assert insights["repeated"][0]["pair"] == "in → on"
 
 
 def test_the_menu_opens_setup_in_terminal(config):

@@ -166,6 +166,7 @@ NOTES = {
     "word-form": "Same word, different form: singular/plural, tense, or agreement with the subject (the result shows, the results show).",
     "uncountable": "Some nouns are uncountable in English: no plural and no “a/an” (information, research, feedback, evidence). Count them with “pieces of” or “studies”.",
     "word-choice": "A more precise or more natural word for this context.",
+    "confusable": "Pairs of words that are easy to mix up (then/than, its/it's, affect/effect). Check the pair each time.",
     "added": "A missing word was added so the sentence is complete and grammatical.",
     "removed": "Words that add no meaning were removed; shorter is usually clearer.",
     "rephrased": "Reworded to read more naturally in English.",

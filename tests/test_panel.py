@@ -170,3 +170,31 @@ def test_grammar_fixes_offer_no_keep_link(page):
     send(page, {"type": "begin", "original": "They achieve it.", "mode": "fix"})
     send(page, check_result("They achieve it.", "They achieved it."))
     assert page.locator("li button").count() == 0
+
+
+def test_insights_view(page):
+    send(
+        page,
+        {
+            "type": "insights",
+            "total": 7,
+            "since": "2026-10-12",
+            "categories": [
+                {"label": "Articles", "count": 5, "note": "Use “an” before a vowel sound."},
+                {"label": "Prepositions", "count": 2, "note": "Learn them in phrases."},
+            ],
+            "repeated": [{"pair": "in → on", "count": 2, "example": "results [in] the other hand"}],
+        },
+    )
+    text = page.locator("main").inner_text()
+    assert "7 changes you accepted since 2026-10-12" in text
+    assert "Use “an” before a vowel sound." in text
+    assert "e.g. …results [in] the other hand…" in text
+    assert page.locator(".bar").count() == 2
+    assert page.locator("#replace").is_hidden() and page.locator(".modes").is_hidden()
+    assert page.locator("#cancel").inner_text().startswith("Close")
+
+
+def test_insights_without_history(page):
+    send(page, {"type": "insights", "total": 0, "since": "", "categories": [], "repeated": []})
+    assert "No history yet" in page.locator("main").inner_text()
