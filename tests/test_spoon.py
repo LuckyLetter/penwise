@@ -408,7 +408,7 @@ def test_in_a_document_the_panel_opens_at_the_selection(config):
         }
     )
     spoon.run('spoon:check("fix")')
-    assert panel_frame(spoon) == {"x": 300 + 125 - 240, "y": 400 - 12 - 240, "w": 480, "h": 240}  # centered
+    assert panel_frame(spoon) == {"x": 300, "y": 400 - 12 - 240, "w": 480, "h": 240}
 
 
 def utf16(text):
@@ -741,7 +741,7 @@ def test_without_a_known_text_box_the_panel_opens_above_the_mouse_pointer(config
     g.FIELD = spoon.to_lua({"AXRole": "AXTextArea", "AXValue": "", "COPY_ALL": "Wait untill noon."})
     spoon.run('spoon:check("fix")')
     spoon.run_tasks()
-    assert panel_frame(spoon) == {"x": 400 - 240, "y": 820 - 14 - 12 - 240, "w": 480, "h": 240}
+    assert panel_frame(spoon) == {"x": 400 - 24, "y": 820 - 14 - 12 - 240, "w": 480, "h": 240}
 
 
 def test_a_big_text_area_without_a_cursor_position_uses_the_mouse_pointer(config):
@@ -801,7 +801,7 @@ def test_a_tall_text_box_without_room_around_it_puts_the_panel_by_the_cursors_li
         }
     )
     spoon.run('spoon:check("fix")')
-    assert panel_frame(spoon) == {"x": 12, "y": 400 - 12 - 240, "w": 900, "h": 240}
+    assert panel_frame(spoon) == {"x": 100, "y": 400 - 12 - 240, "w": 900, "h": 240}
 
 
 def test_a_panel_too_tall_for_either_side_shrinks_instead_of_covering_the_text(config):
@@ -843,11 +843,12 @@ def test_in_a_terminal_the_panel_goes_above_the_line_you_are_typing(config):
     "box_x, box_w, panel_x, panel_w",
     [
         (300, 600, 300, 600),  # as wide as the box, right above it
-        (300, 300, 300 + 150 - 240, 480),  # a narrow box (a chat): the panel is centered over it
-        (100, 1100, 100 + 550 - 450, 900),  # a wide box: centered, at most 900 wide
+        (300, 300, 300, 480),  # a narrow box (a chat): at least 480 wide, from the box's left edge
+        (100, 1100, 100, 900),  # a wide box: at most 900 wide
+        (1100, 300, 1440 - 480 - 12, 480),  # near the screen's right edge: kept on the screen
     ],
 )
-def test_the_panel_is_centered_over_the_text_box(config, box_x, box_w, panel_x, panel_w):
+def test_the_panel_lines_up_with_the_left_edge_of_the_text_box(config, box_x, box_w, panel_x, panel_w):
     spoon = Spoon("stream")
     spoon.lua.globals().FIELD = spoon.to_lua(
         {

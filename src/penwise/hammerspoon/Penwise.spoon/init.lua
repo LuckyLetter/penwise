@@ -9,7 +9,7 @@ local obj = {}
 obj.__index = obj
 
 obj.name = "Penwise"
-obj.version = "0.4.9"
+obj.version = "0.4.10"
 obj.author = "LuckyLetter"
 obj.homepage = "https://github.com/LuckyLetter/penwise"
 obj.license = "Apache-2.0 - https://opensource.org/licenses/Apache-2.0"
@@ -565,7 +565,7 @@ function obj:_anchorsFor(element, kind, range)
   local window = self.target and self.target:frame()
   if mouse and window and mouse.x >= window.x and mouse.x <= window.x + window.w
     and mouse.y >= window.y and mouse.y <= window.y + window.h then
-    add({ x = mouse.x, y = mouse.y - 14, w = 0, h = 28 }, "the mouse pointer")
+    add({ x = mouse.x - 24, y = mouse.y - 14, w = 0, h = 28 }, "the mouse pointer")
   end
   return places, names[1] or "the middle of the screen"
 end
@@ -712,15 +712,14 @@ function obj:_paragraphAtCursor(element, value)
   if ok and text then return text, range end
 end
 
--- Where the panel goes: just above a place, centered over it, or just below it when there is no
--- room above; at full size if possible, or else shrunk to the bigger side (it scrolls) rather than
--- covering the text. In the middle of the screen only when no place has room.
+-- Where the panel goes: just above a place, lined up with its left edge, or just below it when
+-- there is no room above; at full size if possible, or else shrunk to the bigger side (it scrolls)
+-- rather than covering the text. In the middle of the screen only when no place has room.
 local GAP, MIN_HEIGHT, MIN_WIDTH, MAX_WIDTH = 12, 150, 480, 900
 
 local function placePanel(places, size, area)
   local function at(place, shrink)
-    local centered = place.x + place.w / 2 - size.w / 2
-    local x = math.max(area.x + GAP, math.min(centered, area.x + area.w - size.w - GAP))
+    local x = math.max(area.x + GAP, math.min(place.x, area.x + area.w - size.w - GAP))
     local above = place.y - GAP - area.y
     local below = area.y + area.h - (place.y + place.h + GAP)
     if size.h <= above then return { x = x, y = place.y - GAP - size.h, h = size.h } end
