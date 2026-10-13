@@ -154,7 +154,7 @@ def test_quick_fix_says_when_there_is_nothing_to_fix(config):
 FIELD_TEXT = "Wait untill noon, please."
 
 
-def check_whole_field(spoon, focus_lost=False, **app):
+def check_whole_field(spoon, focus_lost=False, other_focus=None, **app):
     """Check a text field with nothing selected, then press Replace."""
     spoon.lua.globals().FIELD = spoon.to_lua(
         {"AXRole": "AXTextField", "AXSelectedText": "", "AXValue": FIELD_TEXT, **app}
@@ -165,6 +165,7 @@ def check_whole_field(spoon, focus_lost=False, **app):
     assert spoon.events[0]["original"] == FIELD_TEXT
     assert not any(line.startswith("cmd+") for line in spoon.log)  # nothing selected while you review
     spoon.lua.globals().FOCUS_LOST = focus_lost
+    spoon.lua.globals().OTHER_FOCUS = spoon.to_lua(other_focus) if other_focus else None
     spoon.message({"action": "replace", "text": "Wait until noon, please.", "changes": []})
     spoon.run_tasks()
 
@@ -188,17 +189,15 @@ def test_page_boxes_that_dont_report_the_selection_still_get_the_fix(config):
     assert spoon.log[-2:] == ["cmd+a: user clipboard", "cmd+v: Wait until noon, please."]  # the box kept your text
 
 
-def test_when_cmd_a_cant_be_confirmed_accessibility_selects(config):
+def test_when_the_app_reports_no_focus_cmd_a_is_trusted(config):
     spoon = Spoon("stream")
-    check_whole_field(spoon, focus_lost=True, IGNORES_SELECT_ALL=True)
-    selected = spoon.lua.globals().FIELD.AXSelectedTextRange
-    assert (selected.location, selected.length) == (0, len(FIELD_TEXT))
-    assert spoon.log[-1] == "cmd+v: Wait until noon, please."
+    check_whole_field(spoon, focus_lost=True, IGNORES_SELECT_ALL=True)  # like a box in a Chrome page
+    assert spoon.log[-2:] == ["cmd+a: user clipboard", "cmd+v: Wait until noon, please."]
 
 
-def test_when_the_text_cant_be_selected_the_fix_is_copied_not_pasted_next_to_it(config):
+def test_when_the_keyboard_is_in_another_box_the_fix_is_copied_not_pasted_there(config):
     spoon = Spoon("stream")
-    check_whole_field(spoon, focus_lost=True, IGNORES_AX_SELECTION=True, IGNORES_SELECT_ALL=True)
+    check_whole_field(spoon, other_focus={"AXRole": "AXTextField", "AXValue": "Another box"}, IGNORES_SELECT_ALL=True)
     assert not any(line.startswith("cmd+v") for line in spoon.log)
     assert spoon.log[-1].startswith("alert Penwise: couldn't select your text")
     assert spoon.lua.globals().CLIPBOARD == "Wait until noon, please."
@@ -716,3 +715,46 @@ def test_a_second_press_while_reading_is_ignored(config):
     spoon.run('spoon:check("fix"); spoon:check("fix")')  # pressed twice before the copy came back
     spoon.run_tasks()
     assert [line for line in spoon.log if line.startswith("cmd+c")] == ["cmd+c: user clipboard"]
+
+
+@pytest.mark.parametrize(
+    "line, typed",
+    [
+        ("➜  penwise git:(main) ✗ git comit -m 'Fix typo'", "git comit -m 'Fix typo'"),  # oh-my-zsh
+        ("➜  penwise git:(main) echo untill", "echo untill"),
+        ("➜  ~ echo untill", "echo untill"),
+        ("me@host:~/penwise$ echo untill", "echo untill"),  # bash
+        ("me@mac penwise % echo untill", "echo untill"),  # macOS zsh
+        ("❯ echo untill", "echo untill"),  # starship, powerlevel10k
+    ],
+)
+def test_the_shell_prompt_is_left_out(config, line, typed):
+    spoon = Spoon("stream")
+    check_terminal(spoon, "some output\n" + line)
+    assert spoon.events[0]["original"] == typed
+
+
+def test_without_a_known_text_box_the_panel_opens_above_the_mouse_pointer(config):
+    spoon = Spoon("stream")
+    g = spoon.lua.globals()
+    g.MOUSE = spoon.to_lua({"x": 400, "y": 820})  # you just clicked in the message box
+    g.FIELD = spoon.to_lua({"AXRole": "AXTextArea", "AXValue": "", "COPY_ALL": "Wait untill noon."})
+    spoon.run('spoon:check("fix")')
+    spoon.run_tasks()
+    assert panel_frame(spoon) == {"x": 400 - 24, "y": 820 - 14 - 8 - 240, "w": 480, "h": 240}
+
+
+def test_a_big_text_area_without_a_cursor_position_uses_the_mouse_pointer(config):
+    spoon = Spoon("stream")
+    g = spoon.lua.globals()
+    g.MOUSE = spoon.to_lua({"x": 600, "y": 500})
+    g.FIELD = spoon.to_lua(
+        {
+            "AXRole": "AXTextArea",
+            "AXSelectedText": SELECTION,
+            "AXPosition": {"x": 0, "y": 0},
+            "AXSize": {"w": 1440, "h": 880},
+        }
+    )
+    spoon.run('spoon:check("fix")')
+    assert panel_frame(spoon)["y"] == 500 - 14 - 8 - 240  # not the middle of the screen

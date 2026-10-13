@@ -9,7 +9,7 @@ local obj = {}
 obj.__index = obj
 
 obj.name = "Penwise"
-obj.version = "0.4.4"
+obj.version = "0.4.5"
 obj.author = "LuckyLetter"
 obj.homepage = "https://github.com/LuckyLetter/penwise"
 obj.license = "Apache-2.0 - https://opensource.org/licenses/Apache-2.0"
@@ -406,7 +406,15 @@ end
 
 -- A selection in a terminal can include the frame Claude Code and other tools draw around their
 -- input box, the prompt, and line breaks where long lines wrap: keep only what you typed.
-local PROMPTS = { "^>%s+", "^❯%s+", "^›%s+", "^%$%s+", "^%%%s+", "^#%s+", "^%S+@%S+ .-[%%%$#]%s+", "^[~/]%S*%s+[%%%$#]%s+" }
+local PROMPTS = {
+  "^➜%s+%S+%s+git:%b()%s+✗%s+", -- oh-my-zsh's default: ➜  penwise git:(main) ✗
+  "^➜%s+%S+%s+git:%b()%s+", -- ➜  penwise git:(main)
+  "^➜%s+%S+%s+", -- ➜  ~
+  "^%S+@%S+ .-[%%%$#]%s+", -- macOS zsh: me@mac ~ %
+  "^%S+@[^%s:]+:%S-[%$#]%s+", -- bash: me@host:~/dir$
+  "^[~/]%S*%s+[%%%$#]%s+", -- ~/dir %
+  "^>%s+", "^❯%s+", "^›%s+", "^»%s+", "^λ%s+", "^→%s+", "^▶%s+", "^%$%s+", "^%%%s+", "^#%s+",
+}
 
 local BOX = "\226[\148\149][\128-\191]" -- box drawing characters (─ │ ╭ ╯ …), U+2500–U+257F
 
@@ -523,11 +531,21 @@ local function sameText(a, b)
   return type(a) == "string" and type(b) == "string" and squeeze(a) == squeeze(b)
 end
 
--- Where the text is on screen: the text field, or in a large one (a document), the selection.
-local function textBounds(element)
-  local frame = frameOf(element)
-  if frame and frame.h <= 200 then return frame end
-  return selectionBounds(element) or frame
+-- Where to put the panel: just above the text box; in a big text area (a document), above the
+-- selected text or the cursor's line; in an app that doesn't say where its text box is (WeChat),
+-- above the mouse pointer, as you most likely just clicked in the box.
+function obj:_anchorFor(element, range)
+  local frame = element and frameOf(element)
+  if frame and frame.h <= 200 then return frame, "the text box" end
+  local text = element and selectionBounds(element, range)
+  if text then return text, "the text" end
+  local mouse = hs.mouse.absolutePosition()
+  local window = self.target and self.target:frame()
+  if mouse and window and mouse.x >= window.x and mouse.x <= window.x + window.w
+    and mouse.y >= window.y and mouse.y <= window.y + window.h then
+    return { x = mouse.x - 24, y = mouse.y - 14, w = 0, h = 28 }, "the mouse pointer"
+  end
+  return nil, "the middle of the screen"
 end
 
 -- Roles of things that aren't text: with nothing selected there, Penwise doesn't select all.
@@ -544,15 +562,16 @@ function obj:_readSelection(callback, lookedAgain)
   local terminal = TERMINALS[bundle] == true
   local role = element and attribute(element, "AXRole")
   local readonly = not terminal and element ~= nil and not editable(element)
+  local where -- where the panel goes, for the log
   local function use(text, source, how)
     if terminal then
       text, source = terminalInput(text), { kind = "terminal" }
     end
     self.source = source
-    self:_log("read: %s, %s, %s, %d characters", how, tostring(role), source.kind, #text)
+    self:_log("read: %s, %s, %s, %d characters; panel above %s", how, tostring(role), source.kind, #text, where)
     callback(text)
   end
-  self.anchor = element and textBounds(element)
+  self.anchor, where = self:_anchorFor(element)
   if element then
     local selected = attribute(element, "AXSelectedText")
     if hasText(selected) then
@@ -565,12 +584,11 @@ function obj:_readSelection(callback, lookedAgain)
     end
     if not terminal and self.wholeFieldLimit > 0 and TEXT_FIELD_ROLES[role] and hasText(value) then
       if #value <= self.wholeFieldLimit then
-        self.anchor = frameOf(element) or self.anchor
         return use(value, { kind = "field", element = element }, "whole text box")
       end
       local paragraph, range = self:_paragraphAtCursor(element, value)
       if paragraph then
-        self.anchor = selectionBounds(element, range) or self.anchor
+        self.anchor, where = self:_anchorFor(element, range)
         return use(paragraph, { kind = "paragraph", element = element, range = range }, "paragraph")
       end
     end
@@ -902,13 +920,9 @@ function obj:_pasteOver(text)
   end
   local ways
   if source.kind == "field" then
-    ways = {
-      { "⌘A", function() hs.eventtap.keyStroke({ "cmd" }, "a", 0) end, 1.0, true },
-      { "Accessibility", function()
-        local value = attribute(element, "AXValue")
-        selectRange({ location = 0, length = utf16Length(type(value) == "string" and value or self.text) })
-      end },
-    }
+    -- ⌘A selects all of the text box that has the keyboard. Page boxes in Chrome don't report
+    -- what it selected, so unless the keyboard is in another text box, that is good enough.
+    ways = { { "⌘A", function() hs.eventtap.keyStroke({ "cmd" }, "a", 0) end, 1.0, true } }
   else
     ways = {
       { "the selection already there", function() end, 0.15 },
@@ -920,9 +934,10 @@ function obj:_pasteOver(text)
     if not way then return self:_copyInstead(text) end
     way[2]()
     self:_whenSelected(element, way[3] or 0.6, function(selected)
-      -- Some page boxes (Google's search box) don't report what ⌘A selected. ⌘A selects all of
-      -- the focused text box, so it is enough that the box still has the focus and your text.
-      if not selected and way[4] then selected = self:_stillInTheBox() end
+      if not selected and way[4] and not self:_keyboardElsewhere() then
+        self:_log("⌘A not confirmed by the app; the keyboard is still in the text box")
+        selected = true
+      end
       if not selected then return try(n + 1) end
       self:_log("selected the text (%s), pasted the fix", way[1])
       paste(text, self)
@@ -947,11 +962,12 @@ function obj:_whenSelected(element, seconds, done)
   end)
 end
 
--- Whether the focused element is still a text box holding the checked text.
-function obj:_stillInTheBox()
+-- Whether the keyboard is in a different text box (one that doesn't hold the checked text).
+function obj:_keyboardElsewhere()
   local focused = attribute(hs.axuielement.systemWideElement(), "AXFocusedUIElement")
+  local value = focused and attribute(focused, "AXValue")
   return focused ~= nil and TEXT_FIELD_ROLES[attribute(focused, "AXRole")] == true
-    and sameText(attribute(focused, "AXValue"), self.text)
+    and type(value) == "string" and not sameText(value, self.text)
 end
 
 -- After a select-all for reading, put the cursor back at the end, so typing doesn't replace it all.

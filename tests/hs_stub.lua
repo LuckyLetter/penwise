@@ -19,6 +19,7 @@ TARGET = {
   screen = function() return screen end,
   title = function() return WINDOW_TITLE or "Draft" end,
   isFullScreen = function() return FULL_SCREEN == true end,
+  frame = function() return { x = 0, y = 0, w = 1440, h = 900 } end,
 }
 
 PANEL = { visible = false, frame = { x = 0, y = 0, w = 640, h = 560 } }
@@ -143,8 +144,10 @@ hs = {
   screen = { mainScreen = function() return screen end },
   axuielement = {
     systemWideElement = function()
-      -- FOCUS_LOST: no text box has the focus any more.
-      return { attributeValue = function(_, name) return name == "AXFocusedUIElement" and not FOCUS_LOST and field or nil end }
+      -- FOCUS_LOST: nothing reports the focus. OTHER_FOCUS: the keyboard is in another element.
+      local focused = field
+      if OTHER_FOCUS then focused = { attributeValue = function(_, name) return OTHER_FOCUS[name] end } end
+      return { attributeValue = function(_, name) return name == "AXFocusedUIElement" and not FOCUS_LOST and focused or nil end }
     end,
     applicationElement = function()
       return {
@@ -224,5 +227,6 @@ hs = {
       return menu
     end,
   },
+  mouse = { absolutePosition = function() return MOUSE end },
   osascript = { applescript = function(script) log("applescript " .. script); return true end },
 }
