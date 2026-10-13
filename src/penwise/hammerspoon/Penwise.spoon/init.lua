@@ -190,6 +190,7 @@ function obj:_menuItems()
     action("Quick fix selection", "quick", function() self:quickFix() end),
     { title = "-" },
     { title = "Your recurring fixes…", fn = function() self:showInsights() end },
+    { title = "Try it on a practice note", fn = function() self:_runQuietly("try") end },
     { title = "Change model or API key…", fn = function() self:_openInTerminal("setup") end },
     { title = "Check my setup…", fn = function() self:_openInTerminal("doctor") end },
   }) do
@@ -216,6 +217,12 @@ function obj:showInsights()
     end
   end, concat(self.args, { "insights", "--json" }))
   self.insightsTask:start()
+end
+
+-- Run a penwise command that needs no answer and shows nothing.
+function obj:_runQuietly(subcommand)
+  self.quietTask = hs.task.new(self.bin, nil, concat(self.args, { subcommand }))
+  self.quietTask:start()
 end
 
 -- Open Terminal and run a penwise command there (for the interactive ones).

@@ -216,6 +216,7 @@ def test_the_menu_bar_offers_every_action_with_its_hotkey(config):
         "Quick fix selection    ⌃⌥⌘P",
         "-",
         "Your recurring fixes…",
+        "Try it on a practice note",
         "Change model or API key…",
         "Check my setup…",
     ]

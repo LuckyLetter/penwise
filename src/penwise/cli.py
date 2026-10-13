@@ -96,6 +96,9 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--clear", action="store_true", help="delete the history file")
     p.set_defaults(run=cmd_history)
 
+    p = sub.add_parser("try", help="open a practice note to try the hotkey on (macOS)")
+    p.set_defaults(run=cmd_try)
+
     p = sub.add_parser("doctor", help="check your setup and test the model")
     p.set_defaults(run=cmd_doctor)
 
@@ -281,6 +284,15 @@ def cmd_history(args: argparse.Namespace) -> int:
 def cmd_init(args: argparse.Namespace) -> int:
     path = config.write_template(force=args.force)
     print(f"Created {path}\nEdit it to choose your model, then run `penwise doctor`.")
+    return 0
+
+
+def cmd_try(args: argparse.Namespace) -> int:
+    if platform.system() != "Darwin":
+        print('The practice note is for the Mac hotkey. Here, try: penwise check "This sentence have a error."')
+        return 0
+    path = setup_mac.open_practice_note(config.config_path().parent)
+    print(f"Opened {path} in TextEdit. Click in it and press Control+Option+P.")
     return 0
 
 

@@ -200,3 +200,10 @@ def test_tips_are_shown_to_new_users_only(server, isolated, monkeypatch, capsys)
     history.record([{"before": "a", "after": "an", "category": "article"}] * 3)
     _, out, _ = run(args, monkeypatch, capsys)
     assert json.loads(out.splitlines()[0])["tips"] is False
+
+
+def test_try_opens_the_practice_note_on_a_mac(isolated, monkeypatch, capsys):
+    monkeypatch.setattr(cli.platform, "system", lambda: "Darwin")
+    monkeypatch.setattr(cli.setup_mac.subprocess, "run", lambda command, **kwargs: None)
+    _, out, _ = run(["try"], monkeypatch, capsys)
+    assert "Try Penwise.txt" in out and (isolated / "Try Penwise.txt").exists()

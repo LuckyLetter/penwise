@@ -96,7 +96,8 @@ Three design rules keep it trustworthy:
 | Esc                 | close without changing anything   |
 
 Prefer clicking? The **✎ icon in the menu bar** has the same three actions, plus *Your recurring fixes*,
-*Change model or API key*, and *Check my setup*.
+*Try it on a practice note* (handy for showing a colleague; also `penwise try`), *Change model or API key*, and
+*Check my setup*.
 
 **You rarely need to select anything.** With nothing selected, Penwise reads the text straight from the app: in a
 short text box (a message, a comment, up to 2,000 characters) it takes the whole box; in a longer document, the
