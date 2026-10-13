@@ -91,3 +91,11 @@ def test_the_practice_note_opens_in_textedit(tmp_path, monkeypatch):
     note = path.read_text(encoding="utf-8")
     assert "[[?]]" in note and "[3]" in note
     assert len(note) <= 2000  # short enough to be checked whole, without selecting
+
+
+def test_hotkey_log_shows_the_last_lines(tmp_path, monkeypatch):
+    log = tmp_path / "penwise-hotkey.log"
+    monkeypatch.setattr(setup_mac, "HOTKEY_LOG", log)
+    assert setup_mac.hotkey_log() == []
+    log.write_text("".join(f"step {n}\n" for n in range(30)))
+    assert setup_mac.hotkey_log(3) == ["step 27", "step 28", "step 29"]

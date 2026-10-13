@@ -9,7 +9,7 @@ local obj = {}
 obj.__index = obj
 
 obj.name = "Penwise"
-obj.version = "0.4.0"
+obj.version = "0.4.1"
 obj.author = "LuckyLetter"
 obj.homepage = "https://github.com/LuckyLetter/penwise"
 obj.license = "Apache-2.0 - https://opensource.org/licenses/Apache-2.0"
@@ -41,10 +41,30 @@ obj.showMenu = true
 --- Look for a new version once a day; when there is one, the menu offers to update.
 obj.checkForUpdates = true
 
+--- Penwise.logFile
+--- Variable
+--- A log of what the hotkey did, step by step (never your text), which `penwise doctor` shows
+--- when something doesn't work. Set to nil to keep no log.
+obj.logFile = os.getenv("HOME") .. "/Library/Logs/penwise-hotkey.log"
+
 obj.logger = hs.logger.new("Penwise")
 
 local PANEL_WIDTH = 640
 local HAMMERSPOON = "org.hammerspoon.Hammerspoon"
+
+-- Terminals show past commands and output as one big text area, and a paste there types at the
+-- prompt instead of replacing anything. So only a selection is checked, and the fix is copied.
+local TERMINALS = {
+  ["com.apple.Terminal"] = true,
+  ["com.googlecode.iterm2"] = true,
+  ["dev.warp.Warp-Stable"] = true,
+  ["net.kovidgoyal.kitty"] = true,
+  ["org.alacritty"] = true,
+  ["io.alacritty"] = true,
+  ["com.mitchellh.ghostty"] = true,
+  ["com.github.wez.wezterm"] = true,
+  ["co.zeit.hyper"] = true,
+}
 
 local spoonPath = hs.spoons.scriptPath()
 
@@ -80,6 +100,20 @@ local function takeLines(buffer)
     buffer = buffer:sub(newline + 1)
   end
   return lines, buffer
+end
+
+function obj:_log(format, ...)
+  if not self.logFile then return end
+  local line = os.date("%Y-%m-%d %H:%M:%S  ") .. string.format(format, ...) .. "\n"
+  pcall(function()
+    local size = hs.fs.attributes(self.logFile, "size")
+    if type(size) == "number" and size > 200000 then os.rename(self.logFile, self.logFile .. ".old") end
+    local file = io.open(self.logFile, "a")
+    if file then
+      file:write(line)
+      file:close()
+    end
+  end)
 end
 
 -- "3 fixes: Articles, Word form"
@@ -206,6 +240,7 @@ end
 function obj:showInsights()
   self.target = hs.window.focusedWindow()
   self.app = hs.application.frontmostApplication() -- to go back to when you close it
+  self.fullScreen = self.target ~= nil and self.target:isFullScreen() == true
   self.anchor = nil
   self:_showPanel()
   self:_send(hs.json.encode({ type = "note", title = "Your recurring fixes", text = "Loading…" }))
@@ -242,8 +277,7 @@ end
 --- Reads the selected text in the frontmost app and opens the review panel.
 function obj:check(mode)
   -- In the panel itself, the hotkey switches the mode. From an app, it checks that app's text.
-  local front = hs.application.frontmostApplication()
-  if self.webview and self.webview:isVisible() and front and front:bundleID() == HAMMERSPOON then
+  if self:_panelInFront() then
     self:_review(self.text, mode)
     return
   end
@@ -252,6 +286,12 @@ function obj:check(mode)
     self:_showPanel()
     self:_review(text, mode)
   end)
+end
+
+function obj:_panelInFront()
+  if not (self.webview and self.webview:isVisible()) then return false end
+  local front = hs.application.frontmostApplication()
+  return self.panelFocused or (front ~= nil and front:bundleID() == HAMMERSPOON)
 end
 
 --- Penwise:quickFix()
@@ -275,6 +315,9 @@ function obj:quickFix()
         local note = held > 0 and string.format("  · %d left for you to review (⌃⌥P)", held) or ""
         if #applied == 0 then
           hs.alert.show("Penwise: looks good, nothing to fix" .. note, 3)
+        elseif self.source.kind == "readonly" then
+          self:_replace(event.edited, applied)
+          hs.alert.show("Penwise: " .. summarize(applied) .. ", copied: paste it with ⌘V" .. note, 4)
         else
           self:_replace(event.edited, applied)
           hs.alert.show("Penwise: " .. summarize(applied) .. "  (⌘Z to undo)" .. note, 3)
@@ -295,8 +338,9 @@ function obj:_withSelection(callback)
     hs.alert.show("Penwise: turn on Hammerspoon in System Settings → Privacy & Security → Accessibility", 6)
     return
   end
+  if self:_panelInFront() then return end -- no app text to read
   local app = hs.application.frontmostApplication()
-  if app and app:bundleID() == HAMMERSPOON then return end -- the panel is in front: no app text to read
+  if app and app:bundleID() == HAMMERSPOON then return end
   self.target = hs.window.focusedWindow()
   self.style = nil -- Improve's tone, when chosen in the panel
   self.app = app
@@ -305,6 +349,8 @@ function obj:_withSelection(callback)
     "--app", (app and app:bundleID()) or "",
     "--window", (self.target and self.target:title()) or "",
   }
+  self.fullScreen = self.target ~= nil and self.target:isFullScreen() == true
+  self:_log("hotkey in %s%s", (app and app:bundleID()) or "?", self.fullScreen and " (full screen)" or "")
   self:_readSelection(function(text)
     if not text or not text:find("%S") then
       hs.alert.show("Penwise: click in a text box, or select the text to check")
@@ -321,6 +367,14 @@ local TEXT_FIELD_ROLES = { AXTextArea = true, AXTextField = true, AXComboBox = t
 local function attribute(element, name)
   local ok, value = pcall(function() return element:attributeValue(name) end)
   if ok then return value end
+end
+
+-- Whether the app lets you edit this text: text boxes yes (some apps report rich-text boxes as
+-- not settable, so their word is taken); anything else (a web page, a PDF) only if it says so.
+local function editable(element)
+  if TEXT_FIELD_ROLES[attribute(element, "AXRole")] then return true end
+  local ok, settable = pcall(function() return element:isAttributeSettable("AXValue") end)
+  return not (ok and settable == false)
 end
 
 local function hasText(value)
@@ -406,39 +460,49 @@ end
 
 -- Ask the app for its selected text. With nothing selected, use the whole text field if it
 -- is short, or else the paragraph at the cursor. If the app can't say, copy with ⌘C.
--- `self.source` remembers where the text came from, so Replace can select it again.
-function obj:_readSelection(callback)
+-- `self.source` remembers where the text came from, so Replace can select it again; text that
+-- can't be edited there (a terminal, a web page) is "readonly": the fix gets copied instead.
+function obj:_readSelection(callback, lookedAgain)
   local element = attribute(hs.axuielement.systemWideElement(), "AXFocusedUIElement")
+  local bundle = self.app and self.app:bundleID()
+  local readonly = TERMINALS[bundle] or (element ~= nil and not editable(element))
+  local function use(text, source, how)
+    self.source = source
+    self:_log("read: %s, %s%s, %d characters", how, tostring(element and attribute(element, "AXRole")),
+      readonly and ", read-only" or "", #text)
+    callback(text)
+  end
   self.anchor = element and textBounds(element)
-  self.source = { kind = "copy" }
   if element then
     local selected = attribute(element, "AXSelectedText")
     if hasText(selected) then
-      self.source = { kind = "selection", element = element, range = attribute(element, "AXSelectedTextRange") }
-      callback(selected)
-      return
+      local range = attribute(element, "AXSelectedTextRange")
+      return use(selected, { kind = readonly and "readonly" or "selection", element = element, range = range }, "selection")
     end
     local value = attribute(element, "AXValue")
-    if self.wholeFieldLimit > 0 and TEXT_FIELD_ROLES[attribute(element, "AXRole")] and hasText(value) then
+    if not readonly and self.wholeFieldLimit > 0 and TEXT_FIELD_ROLES[attribute(element, "AXRole")] and hasText(value) then
       if #value <= self.wholeFieldLimit then
-        self.source = { kind = "field", element = element }
         self.anchor = frameOf(element) or self.anchor
-        callback(value)
-        return
+        return use(value, { kind = "field", element = element }, "whole text box")
       end
       local paragraph, range = self:_paragraphAtCursor(element, value)
       if paragraph then
-        self.source = { kind = "paragraph", element = element, range = range }
         self.anchor = selectionBounds(element, range) or self.anchor
-        callback(paragraph)
-        return
+        return use(paragraph, { kind = "paragraph", element = element, range = range }, "paragraph at the cursor")
       end
     end
   end
-  if not hasText(element and attribute(element, "AXValue")) and self.app then
-    -- Electron apps (Slack, Teams, Discord, ...) describe their text fields to other apps
-    -- only when asked to. Ask, so that next time the text can be read without copying.
-    pcall(function() hs.axuielement.applicationElement(self.app):setAttributeValue("AXManualAccessibility", true) end)
+  if not lookedAgain and self.app and not hasText(element and attribute(element, "AXValue")) then
+    -- Electron apps (Claude, Slack, Teams, ...) describe their text boxes to other apps only when
+    -- asked to. Ask, give the app a moment, and look again.
+    local ok, asked = pcall(function()
+      return hs.axuielement.applicationElement(self.app):setAttributeValue("AXManualAccessibility", true)
+    end)
+    if ok and asked then
+      self:_log("asked %s to describe its text boxes; looking again", tostring(bundle))
+      self.lookAgainTimer = hs.timer.doAfter(0.3, function() self:_readSelection(callback, true) end)
+      return
+    end
   end
 
   local saved = hs.pasteboard.readAllData()
@@ -451,6 +515,8 @@ function obj:_readSelection(callback)
       self.copyTimer:stop()
       local text = copied and hs.pasteboard.getContents() or nil
       restoreClipboard(saved)
+      self.source = { kind = readonly and "readonly" or "copy" }
+      self:_log("read: copied with ⌘C, %d characters%s", text and #text or 0, readonly and ", read-only" or "")
       callback(text)
     end
   end)
@@ -491,9 +557,12 @@ function obj:_showPanel()
     local content = hs.webview.usercontent.new("penwise")
     content:setCallback(function(message) self:_onMessage(message.body) end)
     self.ready = false
-    -- A popover: no title bar; the page draws the rounded panel on a transparent window.
+    -- A popover: no title bar; the page draws the rounded panel on a transparent window. Like
+    -- Spotlight, it takes the keyboard without bringing Hammerspoon forward ("nonactivating"),
+    -- so macOS doesn't switch away from an app in full screen.
+    local masks = hs.webview.windowMasks
     self.webview = hs.webview.new({ x = 0, y = 0, w = PANEL_WIDTH, h = self.panelHeight }, {}, content)
-      :windowStyle({ "borderless" })
+      :windowStyle(masks.borderless | (masks.nonactivating or 0))
       :transparent(true)
       :shadow(true)
       :windowTitle("Penwise")
@@ -505,17 +574,27 @@ function obj:_showPanel()
         if action == "closing" then
           self:_close()
           self:_returnToApp()
-        elseif action == "focusChange" and not hasFocus and self.webview:isVisible() then
-          self:_close() -- you clicked somewhere else: get out of the way
+        elseif action == "focusChange" then
+          self.panelFocused = hasFocus == true
+          if not hasFocus and self.webview:isVisible() then
+            self:_log("panel lost focus: closed")
+            self:_close() -- you clicked somewhere else: get out of the way
+          end
         end
       end)
       :html(self.html)
   end
   self:_placePanel()
   self.webview:show()
-  hs.focus()
-  local window = self.webview:hswindow()
-  if window then window:focus() end
+  if self.fullScreen then
+    -- Bringing Hammerspoon forward would switch to the desktop: the panel takes the keyboard as it is.
+    self:_log("panel shown over a full-screen app")
+  else
+    hs.focus()
+    local window = self.webview:hswindow()
+    if window then window:focus() end
+    self:_log("panel shown")
+  end
 end
 
 -- Size the panel to fit its content, and put it next to the text being checked. It is as
@@ -532,7 +611,8 @@ end
 -- Check the text and stream the results into the review panel.
 function obj:_review(text, mode)
   self.text, self.mode = text, mode
-  self:_send(hs.json.encode({ type = "begin", original = text, mode = mode }))
+  local readonly = self.source ~= nil and self.source.kind == "readonly"
+  self:_send(hs.json.encode({ type = "begin", original = text, mode = mode, readonly = readonly or nil }))
   self:_run(text, mode, {}, function(_, line) self:_send(line) end)
 end
 
@@ -634,7 +714,12 @@ end
 -- add it next to the original.
 function obj:_replace(text, changes)
   self:_close()
-  if text ~= self.text then
+  local kind = (self.source or {}).kind
+  self:_log("replace: %s", tostring(kind))
+  if kind == "readonly" then
+    hs.pasteboard.setContents(text)
+    self:_returnToApp()
+  elseif text ~= self.text then
     self:_returnToApp(function() self:_pasteOver(text) end, function() self:_copyInstead(text) end)
   else
     self:_returnToApp()
@@ -654,17 +739,26 @@ function obj:_pasteOver(text)
     hs.eventtap.keyStroke({ "cmd" }, "v", 0)
     self.restoreTimer = hs.timer.doAfter(1, function() restoreClipboard(saved) end)
   end
-  if self:_selectSource() then return paste() end
+  if self:_selectSource() then
+    self:_log("selected the text, pasted the fix")
+    return paste()
+  end
   if self.source.kind ~= "field" then return self:_copyInstead(text) end
   -- Some apps only select through the keyboard.
   hs.eventtap.keyStroke({ "cmd" }, "a", 0)
   self.selectTimer = hs.timer.doAfter(0.1, function()
     local selected = attribute(self.source.element, "AXSelectedText")
-    if selected == nil or sameText(selected, self.text) then paste() else self:_copyInstead(text) end
+    if selected == nil or sameText(selected, self.text) then
+      self:_log("selected the text with ⌘A, pasted the fix")
+      paste()
+    else
+      self:_copyInstead(text)
+    end
   end)
 end
 
 function obj:_copyInstead(text)
+  self:_log("couldn't select the text: copied the fix instead")
   hs.pasteboard.setContents(text)
   hs.alert.show("Penwise: couldn't select your text to replace it, so the fix is copied. Select your text and press ⌘V.", 6)
 end
@@ -703,6 +797,7 @@ function obj:_returnToApp(fn, fallback)
     if back or hs.timer.secondsSinceEpoch() - started > 2 then
       self.returnTimer:stop()
       -- A moment more for the app to give the keyboard back to its text box.
+      self:_log(back and "back in the app" or "the app didn't come back to the front")
       self.settleTimer = hs.timer.doAfter(0.1, function()
         if back then fn() elseif fallback then fallback() end
       end)
@@ -712,6 +807,7 @@ end
 
 -- Hide the panel and ignore a check that is still running.
 function obj:_close()
+  self.panelFocused = false
   self.run = self.run + 1
   if self.task and self.task:isRunning() then self.task:terminate() end
   if self.webview then self.webview:hide() end

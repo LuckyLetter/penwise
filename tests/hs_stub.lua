@@ -4,7 +4,8 @@
 -- FIELD.BOUNDS where the selected text is on screen. PANEL holds the panel's window.
 -- FIELD.IGNORES_AX_SELECTION makes the app ignore selections made through Accessibility, and
 -- FIELD.SELECT_ALL_KEY makes ⌘A select the whole field. FRONT_APP is the app in front, when
--- it isn't the one being edited (APP_ID).
+-- it isn't the one being edited (APP_ID). FULL_SCREEN puts the app in full screen, FIELD.READONLY
+-- makes the text not editable, and ELECTRON_FIELD is what an Electron app shows once asked to.
 
 LOG, JS = {}, {}
 CLIPBOARD, COUNT = "user clipboard", 1
@@ -16,14 +17,16 @@ TARGET = {
   focus = function() log("focus target") end,
   screen = function() return screen end,
   title = function() return WINDOW_TITLE or "Draft" end,
+  isFullScreen = function() return FULL_SCREEN == true end,
 }
 
 PANEL = { visible = false, frame = { x = 0, y = 0, w = 640, h = 560 } }
 local webview = {}
-for _, name in ipairs({ "windowStyle", "transparent", "shadow", "windowTitle", "allowTextEntry", "level", "html" }) do
+for _, name in ipairs({ "transparent", "shadow", "windowTitle", "allowTextEntry", "level", "html" }) do
   webview[name] = function(self) return self end
 end
 function webview:behavior(value) PANEL.behavior = value; return self end
+function webview:windowStyle(value) PANEL.style = value; return self end
 function webview:windowCallback(fn) WINDOW_CALLBACK = fn; return self end
 function webview:show() PANEL.visible = true; return self end
 function webview:hide() log("hide panel"); PANEL.visible = false; return self end
@@ -96,6 +99,7 @@ local field = {
     return self
   end,
   parameterizedAttributeValue = function(_, name) return name == "AXBoundsForRange" and FIELD.BOUNDS or nil end,
+  isAttributeSettable = function(_, name) return not (name == "AXValue" and FIELD.READONLY) end,
 }
 
 hs = {
@@ -127,7 +131,15 @@ hs = {
       return { attributeValue = function(_, name) return name == "AXFocusedUIElement" and field or nil end }
     end,
     applicationElement = function()
-      return { setAttributeValue = function(_, name, value) log("app " .. name .. " = " .. tostring(value)) end }
+      return {
+        setAttributeValue = function(self, name, value)
+          log("app " .. name .. " = " .. tostring(value))
+          if ELECTRON_FIELD then
+            FIELD, ELECTRON_FIELD = ELECTRON_FIELD, nil
+            return self
+          end
+        end,
+      }
     end,
   },
   pasteboard = {
@@ -160,10 +172,11 @@ hs = {
     end,
     secondsSinceEpoch = function() CLOCK = (CLOCK or 0) + 0.1; return CLOCK end,
   },
-  focus = function() end,
+  focus = function() log("activate Hammerspoon") end,
   accessibilityState = function() return ACCESSIBILITY ~= false end,
   drawing = { windowLevels = { floating = 3 }, windowBehaviors = { canJoinAllSpaces = 1, fullScreenAuxiliary = 256 } },
   webview = {
+    windowMasks = { borderless = 0, nonactivating = 128 },
     new = function() return webview end,
     usercontent = { new = function() return { setCallback = function(_, fn) SEND_MESSAGE = fn end } end },
   },

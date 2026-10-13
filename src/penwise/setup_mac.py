@@ -13,6 +13,8 @@ SPOON_NAME = "Penwise.spoon"
 BEGIN = "-- >>> Penwise"
 END = "-- <<< Penwise"
 APP_PATHS = (Path("/Applications/Hammerspoon.app"), Path.home() / "Applications" / "Hammerspoon.app")
+# What the hotkey did, step by step (never your text); written by the Spoon (Penwise.logFile).
+HOTKEY_LOG = Path.home() / "Library" / "Logs" / "penwise-hotkey.log"
 ACCESSIBILITY_SETTINGS = "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility"
 
 SNIPPET = """{begin} (added by `penwise setup`; you can change the hotkeys below)
@@ -139,3 +141,11 @@ def open_practice_note(directory: Path) -> Path:
     path.write_text(PRACTICE_NOTE, encoding="utf-8")
     subprocess.run(["open", "-e", str(path)], capture_output=True)
     return path
+
+
+def hotkey_log(lines: int = 15) -> list[str]:
+    """The last lines of the hotkey log, or [] when there is none."""
+    try:
+        return HOTKEY_LOG.read_text(encoding="utf-8", errors="replace").splitlines()[-lines:]
+    except OSError:
+        return []

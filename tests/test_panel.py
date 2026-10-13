@@ -255,3 +255,11 @@ def test_a_note_is_shown_once_for_changes_of_the_same_kind(page):
     send(page, check_result("She have two dataset.", "She has two datasets."))
     assert page.locator("li").count() == 2
     assert page.locator("li .note").count() == 1  # both are "Word form"
+
+
+def test_text_that_cant_be_edited_there_is_copied(page):
+    send(page, {"type": "begin", "original": "a eror", "mode": "fix", "readonly": True})
+    send(page, check_result("a eror", "an error"))
+    assert page.locator("#primary").inner_text().startswith("Copy")
+    page.keyboard.press("Enter")
+    assert sent(page)[-1] == {"action": "copy", "text": "an error"}

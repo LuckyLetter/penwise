@@ -192,6 +192,7 @@ const state = {
   explain: false,
   style: "academic",
   tips: false,
+  readonly: false, // the text can't be edited where it came from (a terminal): copy the fix
   explaining: false,
   startedAt: 0,
   elapsedMs: 0,
@@ -469,16 +470,18 @@ function replace() {
   post({ action: "replace", text: finalText(), changes: accepted });
 }
 
-// One button for whatever comes next: Replace, Try again, or Done. Return presses it.
+// One button for whatever comes next: Replace (or Copy), Try again, or Done. Return presses it.
 function primaryLabel() {
   if (state.status === "error") return "Try again";
-  if (state.status === "loading" || (state.status === "ready" && state.changes.length)) return "Replace";
+  if (state.status === "loading" || (state.status === "ready" && state.changes.length)) {
+    return state.readonly ? "Copy" : "Replace";
+  }
   return "Done";
 }
 
 function primary() {
   if (state.status === "error") retry();
-  else if (state.status === "ready" && state.changes.length) replace();
+  else if (state.status === "ready" && state.changes.length) state.readonly ? copy() : replace();
   else if (state.status !== "loading" && state.status !== "idle") post({ action: "cancel" });
 }
 
@@ -498,6 +501,7 @@ window.penwise = {
         stopTimers();
         Object.assign(state, {
           status: "loading", original: event.original, mode: event.mode, startedAt: Date.now(), elapsedMs: 0,
+          readonly: Boolean(event.readonly),
           segments: [], changes: [], undone: new Set(), warnings: [], error: "", explaining: false,
         });
         ticker = setInterval(() => {

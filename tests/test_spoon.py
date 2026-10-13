@@ -474,3 +474,103 @@ def test_quick_fix_does_nothing_while_the_panel_is_in_front(config):
     spoon.run("spoon:quickFix()")
     spoon.run_tasks()
     assert spoon.log == []
+
+
+TERMINAL_TEXT = "me@mac ~ % penwise history\nHistory: ~/.config/penwise/history.jsonl\nme@mac ~ % "
+
+
+def test_a_terminal_is_never_read_whole(config):
+    spoon = Spoon("stream")
+    g = spoon.lua.globals()
+    g.APP_ID = "com.apple.Terminal"
+    g.FIELD = spoon.to_lua({"AXRole": "AXTextArea", "AXSelectedText": "", "AXValue": TERMINAL_TEXT})
+    spoon.run('spoon:check("fix")')
+    spoon.run_tasks()
+    assert spoon.events == []  # the commands and output above the prompt are not your text
+    assert spoon.log[-1] == "alert Penwise: click in a text box, or select the text to check"
+
+
+def test_in_a_terminal_a_selection_is_checked_and_the_fix_copied(config):
+    spoon = Spoon("stream")
+    g = spoon.lua.globals()
+    g.APP_ID = "com.apple.Terminal"
+    g.FIELD = spoon.to_lua({"AXRole": "AXTextArea", "AXSelectedText": SELECTION, "AXValue": TERMINAL_TEXT})
+    spoon.run('spoon:check("fix")')
+    spoon.message({"action": "ready"})
+    assert spoon.events[0]["readonly"] is True  # the panel's button says Copy
+
+    spoon.run("spoon:quickFix()")
+    spoon.run_tasks()
+    assert not any(line.startswith("cmd+v") for line in spoon.log)  # a paste would type at the prompt
+    assert g.CLIPBOARD == "Wait until the information arrive."
+    assert "alert Penwise: 2 fixes: Spelling, Uncountable noun, copied: paste it with ⌘V" in spoon.log
+
+
+def test_text_selected_on_a_web_page_is_copied_not_replaced(config):
+    spoon = Spoon("stream")
+    spoon.lua.globals().FIELD = spoon.to_lua({"AXRole": "AXWebArea", "AXSelectedText": SELECTION, "READONLY": True})
+    spoon.run('spoon:check("fix")')
+    spoon.message({"action": "ready"})
+    assert spoon.events[0]["readonly"] is True
+
+
+def test_a_text_box_counts_as_editable_whatever_the_app_says(config):
+    spoon = Spoon("stream")
+    spoon.lua.globals().FIELD = spoon.to_lua(
+        {"AXRole": "AXTextArea", "AXSelectedText": "", "AXValue": "Wait untill noon.", "READONLY": True}
+    )
+    spoon.run('spoon:check("fix")')
+    spoon.message({"action": "ready"})
+    assert spoon.events[0] == {"type": "begin", "original": "Wait untill noon.", "mode": "fix"}  # rich-text boxes
+
+
+def test_over_a_full_screen_app_the_panel_doesnt_bring_hammerspoon_forward(config):
+    spoon = Spoon("stream")
+    spoon.lua.globals().FULL_SCREEN = True
+    spoon.run('spoon:check("fix")')
+    assert spoon.lua.globals().PANEL.style == 0 | 128  # borderless, nonactivating
+    assert "activate Hammerspoon" not in spoon.log  # that would switch to the desktop
+
+    spoon.lua.globals().FULL_SCREEN = False
+    spoon.run('spoon:check("fix")')
+    assert "activate Hammerspoon" in spoon.log
+
+
+def test_electron_apps_are_asked_to_show_their_text_and_read_right_away(config):
+    spoon = Spoon("stream")
+    g = spoon.lua.globals()
+    g.FIELD = spoon.to_lua({})  # Claude, Slack, ...: nothing to read until asked
+    g.ELECTRON_FIELD = spoon.to_lua({"AXRole": "AXTextArea", "AXSelectedText": "", "AXValue": "Wait untill noon."})
+    spoon.run('spoon:check("fix")')
+    spoon.message({"action": "ready"})
+    spoon.run_tasks()
+    assert "app AXManualAccessibility = true" in spoon.log
+    assert spoon.events[0]["original"] == "Wait untill noon."
+    assert not any(line.startswith("cmd+c") for line in spoon.log)
+
+
+def test_the_hotkey_in_a_focused_panel_switches_the_mode(config):
+    spoon = Spoon("stream")
+    spoon.run('spoon:check("fix")')
+    spoon.message({"action": "ready"})
+    spoon.run('WINDOW_CALLBACK("focusChange", nil, true)')  # the panel has the keyboard; the app stays in front
+    spoon.run('spoon:check("improve")')
+    assert spoon.events[-1] == {"type": "begin", "original": SELECTION, "mode": "improve"}
+
+
+def test_the_log_says_what_happened_without_your_text(config, tmp_path):
+    spoon = Spoon("stream")
+    log_file = tmp_path / "hotkey.log"
+    spoon.lua.globals().spoon.logFile = str(log_file)
+    check_whole_field(spoon)
+    log = log_file.read_text()
+    for step in [
+        "hotkey in com.apple.TextEdit",
+        "read: whole text box, AXTextField, 25 characters",
+        "panel shown",
+        "replace: field",
+        "back in the app",
+        "selected the text, pasted the fix",
+    ]:
+        assert step in log
+    assert "untill" not in log and "until" not in log

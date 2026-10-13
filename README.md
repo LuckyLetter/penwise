@@ -241,6 +241,10 @@ System Settings → Keyboard → Keyboard Shortcuts → Services. You get the co
   changes on technical text.
 - A few apps don't allow reading or selecting text this way. When Penwise can't select your original text to
   replace it, it doesn't paste next to it: it copies the fix and tells you, so you can select the text and press ⌘V.
+- In a terminal (Terminal, iTerm2, Warp, …), and for text you can't edit (a web page), select the text first; the
+  button then says *Copy*, because pasting there can't replace anything.
+- If the hotkey doesn't do what you expect, run `penwise doctor`: it ends with what the hotkey did, step by step
+  (the app, the kind of text box, what was selected and pasted; never your text).
 
 ## Development
 

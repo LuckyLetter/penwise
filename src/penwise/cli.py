@@ -341,6 +341,10 @@ def cmd_doctor(args: argparse.Namespace) -> int:
         spoon = setup_mac.spoon_installed()
         line("Hotkey", "installed" if has_app and spoon else "not installed (run `penwise setup`)", has_app and spoon)
         ok = ok and has_app and spoon
+        steps = setup_mac.hotkey_log()
+        if steps:
+            print(f"\nWhat the hotkey did lately ({setup_mac.HOTKEY_LOG}; never your text):")
+            print("\n".join(f"  {step}" for step in steps))
     return 0 if ok else 1
 
 
