@@ -60,14 +60,58 @@ EXAMPLES = {
 }
 
 
-def edit_messages(text: str, mode: str) -> tuple[str, list[dict]]:
+# "Fill" is used automatically for text with words in another script, or notes in
+# [[double brackets]] where the writer wasn't sure how to say something in English.
+FILL_SYSTEM = f"""\
+You are an editor for English research and professional writing.
+The writer mixes English with words in their own language, or leaves notes in [[double brackets]] saying what they mean.
+Turn the text into natural, correct English: translate the other-language words, replace each [[note]] with fitting English wording, and fix errors.
+- [[?]] marks a word the writer couldn't find: replace it with the word that fits best.
+- Keep the rest of the text, its meaning, and its structure.
+{_RULES}"""
+
+FILL_INSTRUCTION = "Write this in English:"
+
+FILL_EXAMPLES = [
+    (
+        "我们的方法 improves the accuracy on 嘈杂的数据 by 5% [3].",
+        "Our method improves the accuracy on noisy data by 5% [3].",
+    ),
+    (
+        "The results [[show very clear]] that the model is more robust, but it need [[more time for train]].",
+        "The results clearly show that the model is more robust, but it needs more training time.",
+    ),
+    (
+        "We [[want to say: compare in a fair way]] with all baselines.",
+        "We compare fairly with all baselines.",
+    ),
+    (
+        "The two groups are [[?]] in size, so we [[?]] them directly.",
+        "The two groups are similar in size, so we compare them directly.",
+    ),
+]
+
+
+# In "improve" mode, a line about where the text is going (see presets.style_for).
+STYLE_HINTS = {
+    "email": "The text is an email: make it polite, clear and professional, and keep its greeting and sign-off.",
+    "chat": "The text is a chat message: keep it friendly, short and natural. Do not make it formal.",
+}
+
+
+def edit_messages(text: str, mode: str, fill: bool = False, style: str = "") -> tuple[str, list[dict]]:
     """Build the system prompt and chat messages that ask for an edited text."""
+    system, instruction, examples = (
+        (FILL_SYSTEM, FILL_INSTRUCTION, FILL_EXAMPLES) if fill else (SYSTEM[mode], INSTRUCTION[mode], EXAMPLES[mode])
+    )
+    if mode == "improve" and style in STYLE_HINTS:
+        system += "\n" + STYLE_HINTS[style]
     messages: list[dict] = []
-    for source, target in EXAMPLES[mode]:
-        messages.append({"role": "user", "content": f"{INSTRUCTION[mode]}\n{source}"})
+    for source, target in examples:
+        messages.append({"role": "user", "content": f"{instruction}\n{source}"})
         messages.append({"role": "assistant", "content": target})
-    messages.append({"role": "user", "content": f"{INSTRUCTION[mode]}\n{text}"})
-    return SYSTEM[mode], messages
+    messages.append({"role": "user", "content": f"{instruction}\n{text}"})
+    return system, messages
 
 
 EXPLAIN_SYSTEM = """\

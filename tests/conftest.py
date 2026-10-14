@@ -8,6 +8,7 @@ FIXES = {
     "have a error": "has an error",
     "untill": "until",
     "informations": "information",
+    " [3]": "",  # drops a citation, which Penwise must not apply on its own
 }
 
 
@@ -17,8 +18,18 @@ def fake_edit(text: str) -> str:
     return text
 
 
+class Reject(Exception):
+    """Raised by a test's `reply` function to answer with an API error."""
+
+    def __init__(self, status: int, message: str):
+        super().__init__(message)
+        self.status = status
+
+
 class FakeServer:
     """A tiny OpenAI-compatible chat server for tests."""
+
+    Reject = Reject
 
     def __init__(self):
         self.requests: list[dict] = []
@@ -33,12 +44,16 @@ class FakeServer:
                 body = json.loads(self.rfile.read(int(self.headers["Content-Length"])))
                 server.requests.append(body)
                 server.headers.append(dict(self.headers))
-                if server.status != 200:
+                status = server.status
+                if status != 200:
                     payload = server.error or {"error": {"message": "nope"}}
                 else:
-                    payload = {"choices": [{"message": {"role": "assistant", "content": server.reply(body)}}]}
+                    try:
+                        payload = {"choices": [{"message": {"role": "assistant", "content": server.reply(body)}}]}
+                    except Reject as exc:
+                        status, payload = exc.status, {"error": {"message": str(exc)}}
                 data = json.dumps(payload).encode()
-                self.send_response(server.status)
+                self.send_response(status)
                 self.send_header("Content-Type", "application/json")
                 self.send_header("Content-Length", str(len(data)))
                 self.end_headers()

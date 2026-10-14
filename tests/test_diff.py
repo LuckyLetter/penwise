@@ -10,6 +10,8 @@ PAIRS = [
     ("  leading and trailing space \n", "  leading and trailing spaces \n"),
     ("Line one\nline too", "Line one\nline two"),
     ("", "Something new."),
+    ("We [[want to say: no time]] to run more.", "We had no time to run more."),
+    ("如上所述, 这个问题 is still open.", "As noted above, this issue remains open."),
     ("Unchanged text.", "Unchanged text."),
 ]
 
@@ -67,3 +69,17 @@ def test_ids_start_at_first_id():
 def test_similarity():
     assert similarity("The cat sat on the mat today.", "The cat sat on the mat today.") == 1
     assert similarity("Please summarize this paper for me now.", "Here are three bullet points about it.") < 0.3
+
+
+def test_a_note_in_double_brackets_is_one_change():
+    _, changes = diff("We [[want to say: no time]] to run more.", "We had no time to run more.")
+    assert [(c.before.strip(), c.after.strip()) for c in changes] == [("[[want to say: no time]]", "had no time")]
+
+
+def test_filled_in_words_join_their_neighbours():
+    _, changes = diff("As shown in [12], 这个问题 is still open.", "As shown in [12], this issue remains open.")
+    assert [(c.before, c.after) for c in changes] == [("这个问题 is still", "this issue remains")]
+
+
+def test_an_untouched_note_is_not_a_change():
+    assert diff("Keep [[this]] here.", "Keep [[this]] here.")[1] == []

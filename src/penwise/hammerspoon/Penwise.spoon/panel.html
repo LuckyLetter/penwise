@@ -37,9 +37,13 @@
   }
   * { box-sizing: border-box; }
   html, body { height: 100%; margin: 0; }
+  html { background: transparent; }
   body {
     display: flex;
     flex-direction: column;
+    overflow: hidden;
+    border: 1px solid var(--border);
+    border-radius: 12px;
     background: var(--bg);
     color: var(--text);
     font: 14px/1.5 -apple-system, BlinkMacSystemFont, "Helvetica Neue", sans-serif;
@@ -53,10 +57,10 @@
     padding: 10px 16px;
     border-color: var(--border);
   }
-  header { border-bottom: 1px solid var(--border); }
   footer { border-top: 1px solid var(--border); }
   .spacer { flex: 1; }
   .muted { color: var(--muted); font-size: 12px; }
+  #model { min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; opacity: 0.8; }
 
   .modes { display: inline-flex; background: var(--surface); border-radius: 7px; padding: 2px; }
   .modes button {
@@ -71,7 +75,7 @@
   }
   .modes button[aria-pressed="true"] { background: var(--bg); color: var(--text); box-shadow: 0 1px 2px rgb(0 0 0 / 0.15); }
 
-  main { flex: 1; overflow-y: auto; padding: 14px 16px; }
+  main { flex: 1; overflow-y: auto; padding: 4px 16px 14px; }
   .text {
     white-space: pre-wrap;
     word-wrap: break-word;
@@ -92,15 +96,41 @@
   .change.undone { text-decoration: underline dotted var(--muted); text-underline-offset: 3px; }
   .change.active { outline: 2px solid var(--accent); outline-offset: 1px; }
 
+  .tips { margin: 0 0 12px; padding: 8px 12px; border-radius: 8px; background: var(--surface); font-size: 13px; color: var(--muted); }
   .banner { margin: 0 0 12px; padding: 8px 12px; border-radius: 8px; background: var(--warn-bg); color: var(--warn-text); }
   .good { margin-top: 12px; color: var(--ins); font-weight: 500; }
+  .insight { display: grid; grid-template-columns: 1fr auto; gap: 2px 12px; padding: 8px 0; border-bottom: 1px solid var(--border); }
+  .insight .count { color: var(--muted); font-variant-numeric: tabular-nums; }
+  .insight .bar { grid-column: 1 / 3; height: 4px; border-radius: 2px; background: var(--accent); opacity: 0.55; }
+  .insight .note, .insight .example { grid-column: 1 / 3; font-size: 13px; color: var(--muted); }
+  .note-text { margin: 0; white-space: pre-wrap; font: 13px/1.55 ui-monospace, "SF Mono", Menlo, monospace; -webkit-user-select: text; user-select: text; }
   .error { color: var(--del); }
+
+  .form label { display: block; margin: 16px 0 6px; font-size: 12px; font-weight: 600; color: var(--muted); }
+  .form input, .form select {
+    width: 100%;
+    font: inherit;
+    padding: 7px 10px;
+    border: 1px solid var(--border);
+    border-radius: 7px;
+    background: var(--bg);
+    color: var(--text);
+    -webkit-user-select: text;
+    user-select: text;
+  }
+  .form input:focus, .form select:focus { outline: 2px solid var(--accent); outline-offset: -1px; }
+  .form .row { display: flex; gap: 8px; }
+  .form .row input { flex: 1; }
+  .form .hint { margin-top: 6px; font-size: 12px; color: var(--muted); }
+  .form .modes { margin-top: 2px; }
+  .form .result { margin-top: 16px; }
+  .form .title { margin: 6px 0 4px; font-size: 17px; font-weight: 600; }
 
   h2 { margin: 18px 0 8px; font-size: 12px; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: 0.04em; }
   ol { list-style: none; margin: 0; padding: 0; }
   li {
     display: grid;
-    grid-template-columns: 20px 1fr auto;
+    grid-template-columns: 1fr auto;
     gap: 2px 10px;
     padding: 9px 10px;
     border-radius: 8px;
@@ -108,13 +138,15 @@
   }
   li:hover, li.active { background: var(--surface); }
   li.undone .what, li.undone .note { opacity: 0.45; }
-  li .num { color: var(--muted); font-size: 12px; padding-top: 2px; }
   li .what { font-weight: 500; }
   li .what del { color: var(--del); text-decoration-thickness: 1px; }
   li .what ins { color: var(--ins); text-decoration: none; }
   li .tag { font-size: 12px; color: var(--accent); white-space: nowrap; }
-  li .note, li .why, li .seen { grid-column: 2 / 4; font-size: 13px; color: var(--muted); }
+  li .note, li .why, li .seen { grid-column: 1 / 3; font-size: 13px; color: var(--muted); }
   li .why { color: var(--text); }
+  li .risk { grid-column: 1 / 3; font-size: 13px; color: var(--warn-text); }
+  li .keep { grid-column: 1 / 3; font-size: 12px; color: var(--muted); }
+  button.link { border: 0; background: none; padding: 0; font: inherit; color: var(--accent); cursor: pointer; }
   li .seen { font-size: 12px; }
 
   button.primary, button.secondary {
@@ -127,27 +159,29 @@
   button.primary { border: 0; background: var(--accent); color: var(--accent-text); }
   button.secondary { border: 1px solid var(--border); background: var(--bg); color: var(--text); }
   button:disabled { opacity: 0.4; cursor: default; }
+  [hidden] { display: none !important; }
   kbd { font: inherit; font-size: 11px; opacity: 0.75; margin-left: 6px; }
 </style>
 </head>
 <body>
 <header>
-  <div class="modes" role="group" aria-label="Mode">
+  <div class="modes" id="modes" role="group" aria-label="Mode">
     <button type="button" data-mode="fix" title="Only fix errors (Tab to switch)">Fix</button>
     <button type="button" data-mode="improve" title="Also improve clarity and flow (Tab to switch)">Improve</button>
   </div>
-  <span class="spacer"></span>
-  <span class="muted" id="model"></span>
+  <div class="modes" id="tones" role="group" aria-label="Tone" hidden>
+    <button type="button" data-style="academic" title="Improve for research writing">Research</button>
+    <button type="button" data-style="email" title="Improve for an email">Email</button>
+    <button type="button" data-style="chat" title="Improve for a chat message">Chat</button>
+  </div>
 </header>
 
 <main id="main"></main>
 
 <footer>
-  <span class="muted" id="hint">Click a change to undo it.</span>
+  <span class="muted" id="model"></span>
   <span class="spacer"></span>
-  <button type="button" class="secondary" id="cancel">Cancel<kbd>esc</kbd></button>
-  <button type="button" class="secondary" id="copy">Copy<kbd>⌘C</kbd></button>
-  <button type="button" class="primary" id="replace">Replace<kbd>↩</kbd></button>
+  <button type="button" class="primary" id="primary">Replace<kbd>↩</kbd></button>
 </footer>
 
 <script>
@@ -163,18 +197,47 @@ function post(message) {
 }
 
 const state = {
-  status: "idle", // idle | loading | ready | error
+  status: "idle", // idle | loading | ready | error | note | insights | settings
   original: "",
   mode: "fix",
   model: "",
   segments: [],
   changes: [],
   undone: new Set(),
+  kept: new Set(), // words you asked Penwise to always keep
   warnings: [],
   error: "",
+  note: { title: "", text: "" },
+  insights: null,
   explain: false,
+  style: "academic",
+  tips: false,
+  readonly: false, // the text can't be edited where it came from (a terminal): copy the fix
+  settings: null, // what `penwise settings` says: the current settings and the choices
+  form: {}, // the settings as you change them
+  saving: false,
+  saved: null, // what saving said: it works, or what's wrong
   explaining: false,
+  startedAt: 0,
+  elapsedMs: 0,
 };
+
+// While checking, a ticking timer shows that something is happening. When the
+// text needs no changes, the panel closes by itself unless you interact with it.
+const AUTO_CLOSE_MS = 1500;
+let ticker = null;
+let autoClose = null;
+
+function stopTimers() {
+  clearInterval(ticker);
+  clearTimeout(autoClose);
+  ticker = autoClose = null;
+}
+
+function progressText() {
+  const seconds = Math.floor((Date.now() - state.startedAt) / 1000);
+  return (state.mode === "fix" ? "Checking…" : "Improving…") + (seconds >= 1 ? ` ${seconds}s` : "");
+}
 
 function el(tag, attrs, ...children) {
   const node = document.createElement(tag);
@@ -203,6 +266,26 @@ function acceptedChanges() {
 function toggle(id) {
   if (state.undone.has(id)) state.undone.delete(id);
   else state.undone.add(id);
+  render();
+}
+
+// Offer "never change this" where the model may be "fixing" a name or a term: spelling
+// changes, or words with capitals or digits (Pytorch, ResNet50), of at most 3 words.
+const KEEPABLE = new Set(["spelling", "capitalization", "word-choice"]);
+
+function keepable(change) {
+  const word = change.before.trim();
+  return change.after.trim() && !change.risk && KEEPABLE.has(change.category) &&
+    (change.category === "spelling" || /[\p{Lu}\p{N}]/u.test(word)) &&
+    /^[\p{L}\p{N}][\p{L}\p{N}'’.\-]*(?: [\p{L}\p{N}'’.\-]+){0,2}$/u.test(word);
+}
+
+function keepWord(word) {
+  state.kept.add(word);
+  for (const change of state.changes) {
+    if (change.before.trim() === word) state.undone.add(change.id);
+  }
+  post({ action: "keep", word });
   render();
 }
 
@@ -251,8 +334,11 @@ function renderText() {
 
 function renderChanges() {
   const list = el("ol");
-  state.changes.forEach((change, index) => {
+  const notesShown = new Set(); // each note once, under the first change it explains
+  state.changes.forEach((change) => {
     const seen = change.seen ? `You've made this fix ${change.seen}× before.` : "";
+    const note = notesShown.has(change.note) ? null : change.note;
+    notesShown.add(change.note);
     list.append(
       el(
         "li",
@@ -263,11 +349,21 @@ function renderChanges() {
           onmouseenter: () => highlight(change.id, true),
           onmouseleave: () => highlight(change.id, false),
         },
-        el("span", { class: "num" }, index < 9 ? String(index + 1) : ""),
         el("span", { class: "what" }, ...changeWords(change)),
         el("span", { class: "tag" }, change.label),
-        el("span", { class: "note" }, change.note),
+        note && el("span", { class: "note" }, note),
         change.reason && el("span", { class: "why" }, "Why: " + change.reason),
+        change.risk && state.undone.has(change.id) &&
+          el("span", { class: "risk" }, `Not applied: it would change ${change.risk}. Click to apply it.`),
+        state.kept.has(change.before.trim())
+          ? el("span", { class: "keep" }, `Kept: Penwise won't change “${change.before.trim()}” again.`)
+          : keepable(change) &&
+            el("span", { class: "keep" },
+              el("button", {
+                type: "button", class: "link",
+                onclick: (event) => { event.stopPropagation(); keepWord(change.before.trim()); },
+              }, `Always keep “${change.before.trim()}”`),
+            ),
         seen && el("span", { class: "seen" }, seen),
       ),
     );
@@ -275,11 +371,188 @@ function renderChanges() {
   return list;
 }
 
+// "Your recurring fixes": what you fix most, the rule for each, and fixes you keep repeating.
+function renderInsights(data) {
+  const parts = [el("h2", {}, "Your recurring fixes")];
+  if (!data.total) {
+    parts.push(el("div", { class: "muted" }, "No history yet. Accept some changes, and your patterns will show up here."));
+    return parts;
+  }
+  parts.push(el("div", { class: "muted" }, `${data.total} changes you accepted since ${data.since}`));
+  const most = Math.max(...data.categories.map((c) => c.count));
+  for (const category of data.categories) {
+    parts.push(
+      el("div", { class: "insight" },
+        el("strong", {}, category.label),
+        el("span", { class: "count" }, `${category.count}×`),
+        el("div", { class: "bar", style: `width: ${Math.max(4, (100 * category.count) / most)}%` }),
+        category.note && el("span", { class: "note" }, category.note),
+      ),
+    );
+  }
+  if (data.repeated.length) {
+    parts.push(el("h2", {}, "Fixes you've made more than once"));
+    for (const item of data.repeated) {
+      parts.push(
+        el("div", { class: "insight" },
+          el("strong", {}, item.pair),
+          el("span", { class: "count" }, `${item.count}×`),
+          item.example && el("span", { class: "example" }, `e.g. …${item.example}…`),
+        ),
+      );
+    }
+  }
+  return parts;
+}
+
+// The settings window: where the model runs (on this Mac, or an API), the API key and the model.
+// Save tests them at once.
+const OTHER_MODEL = "other";
+const LOCAL = "ollama";
+const ACCESSIBILITY_SETTINGS = "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility";
+
+// A service Penwise knows (OpenRouter), from the API address you typed: for its key page and models.
+function knownService() {
+  const address = (state.form.base_url || "").trim().replace(/\/+$/, "");
+  return state.settings.providers.find((p) => p.base_url && p.base_url === address && p.key !== LOCAL);
+}
+
+// What depends on the API address: the key page link and the model suggestions. They update as
+// you type, without rebuilding the form (which would swallow a click on Paste).
+function keyHint() {
+  const service = knownService();
+  if (!service || !service.key_url) return ["It's kept in your Mac's Keychain."];
+  return [
+    el("button", { type: "button", class: "link", onclick: () => post({ action: "open-url", url: service.key_url }) },
+      "Get a key"),
+    " · it's kept in your Mac's Keychain",
+  ];
+}
+
+function suggestedModels() {
+  const service = knownService();
+  return (service ? service.models : []).map((m) => el("option", { value: m.id }, m.blurb));
+}
+
+function addressChanged(event) {
+  state.form.base_url = event.target.value;
+  document.getElementById("key-hint").replaceChildren(...keyHint());
+  document.getElementById("suggested-models").replaceChildren(...suggestedModels());
+}
+
+function chooseWhere(where) {
+  const saved = (state.settings.provider === LOCAL) === (where === LOCAL);
+  const local = state.settings.providers.find((p) => p.key === LOCAL);
+  state.form = {
+    ...state.form, where,
+    base_url: where === LOCAL ? "" : (saved ? state.settings.base_url : ""),
+    model: saved ? state.settings.model : (where === LOCAL ? local.models[0].id : ""),
+    otherModel: false,
+  };
+  state.saved = null;
+  render();
+}
+
+function input(attrs, field) {
+  return el("input", {
+    ...attrs, value: state.form[field] || "", oninput: (event) => { state.form[field] = event.target.value; },
+  });
+}
+
+function renderSettings() {
+  const local = state.form.where === LOCAL;
+  const service = local ? state.settings.providers.find((p) => p.key === LOCAL) : knownService();
+  const keySaved = state.settings.has_key && state.settings.provider !== LOCAL;
+  const parts = [
+    el("div", { class: "title" }, state.settings.configured ? "Settings" : "Welcome to Penwise"),
+    !state.settings.configured &&
+      el("div", { class: "muted" }, "Choose the AI model Penwise uses. You can change it any time from the ✎ menu."),
+    // Without Accessibility, Penwise can't read the text box or put the fix in it.
+    state.settings.access === false && el("div", { class: "banner", id: "access" },
+      el("strong", {}, "Allow Penwise to read and replace text"),
+      el("div", {}, "In Privacy & Security → Accessibility, turn on Hammerspoon: it runs Penwise. ",
+        el("button", { type: "button", class: "link", onclick: () => post({ action: "open-url", url: ACCESSIBILITY_SETTINGS }) },
+          "Open System Settings")),
+    ),
+    state.settings.access === "now" && el("div", { class: "good", id: "access" }, "✓ Penwise can read and replace text."),
+    el("label", {}, "Where the model runs"),
+    el("div", { class: "modes", role: "group", "aria-label": "Where the model runs" },
+      el("button", { type: "button", "aria-pressed": String(local), onclick: () => chooseWhere(LOCAL) }, "On this Mac"),
+      el("button", { type: "button", "aria-pressed": String(!local), onclick: () => chooseWhere("api") }, "API"),
+    ),
+    el("div", { class: "hint" }, local
+      ? "Free and private: the model runs on your Mac, with Ollama (ollama.com)."
+      : "Any OpenAI-compatible API, with your API key."),
+  ];
+  if (!local) {
+    parts.push(
+      el("label", { for: "base_url" }, "Address"),
+      el("input", {
+        id: "base_url", value: state.form.base_url || "", placeholder: "https://openrouter.ai/api/v1",
+        oninput: addressChanged,
+      }),
+      el("label", { for: "key" }, "API key"),
+      el("div", { class: "row" },
+        input({ id: "key", type: "password", autocomplete: "off",
+          placeholder: keySaved ? "Saved in your Keychain" : "Paste your key" }, "key"),
+        el("button", { type: "button", class: "secondary", onclick: () => post({ action: "paste-key" }) }, "Paste"),
+      ),
+      el("div", { class: "hint", id: "key-hint" }, ...keyHint()),
+    );
+  }
+  parts.push(el("label", { for: local ? "model-choice" : "model-id" }, "Model"));
+  const models = local ? service.models : [];
+  const listed = models.some((m) => m.id === state.form.model);
+  if (local) {
+    const select = el("select", { id: "model-choice", onchange: (event) => {
+      state.form.otherModel = event.target.value === OTHER_MODEL;
+      state.form.model = state.form.otherModel ? "" : event.target.value;
+      render();
+    } },
+    ...models.map((m) => el("option", { value: m.id }, `${m.id} · ${m.blurb}`)),
+    el("option", { value: OTHER_MODEL }, "Another model…"));
+    select.value = listed && !state.form.otherModel ? state.form.model : OTHER_MODEL;
+    parts.push(select);
+  }
+  if (!local || !listed || state.form.otherModel) {
+    // Suggestions from a service Penwise knows; any model id works.
+    parts.push(input({ id: "model-id", list: "suggested-models", placeholder: "The model's id, as the service names it" }, "model"));
+    if (!local) parts.push(el("datalist", { id: "suggested-models" }, ...suggestedModels()));
+  }
+  if (state.saving) {
+    parts.push(el("div", { class: "result muted pulse" }, "Saving and testing…"));
+  } else if (state.saved && state.saved.ok) {
+    parts.push(el("div", { class: "result good" },
+      `It works: “${state.saved.before}” → “${state.saved.after}” (${state.saved.seconds}s)`));
+  } else if (state.saved) {
+    parts.push(el("div", { class: "result error" }, state.saved.message));
+  }
+  return [el("div", { class: "form" }, ...parts.filter(Boolean))];
+}
+
+function saveSettings() {
+  if (state.saving) return;
+  state.saving = true;
+  state.saved = null;
+  const { where, base_url, model } = state.form;
+  post({
+    action: "save-settings",
+    settings: { provider: where === LOCAL ? LOCAL : "custom", base_url: base_url || "", model, key: state.form.key || "" },
+  });
+  render();
+}
+
 function render() {
-  document.querySelectorAll(".modes button").forEach((button) => {
+  document.querySelectorAll("[data-mode]").forEach((button) => {
     button.setAttribute("aria-pressed", String(button.dataset.mode === state.mode));
   });
-  document.getElementById("model").textContent = state.model;
+  document.querySelectorAll("[data-style]").forEach((button) => {
+    button.setAttribute("aria-pressed", String(button.dataset.style === state.style));
+  });
+  const took = state.status === "ready" && state.elapsedMs ? ` · ${(state.elapsedMs / 1000).toFixed(1)}s` : "";
+  // "mistralai/mistral-small-2603" → "mistral-small-2603"
+  document.getElementById("model").textContent = state.model.split("/").pop() + took;
+  document.getElementById("model").title = state.model;
 
   const main = document.getElementById("main");
   main.className = state.status;
@@ -287,29 +560,69 @@ function render() {
 
   if (state.status === "loading") {
     main.append(el("div", { class: "text" }, state.original));
-    main.append(el("div", { class: "status muted pulse" }, state.mode === "fix" ? "Checking…" : "Improving…"));
+    main.append(el("div", { class: "status muted pulse", id: "progress" }, progressText()));
+  } else if (state.status === "insights") {
+    main.append(...renderInsights(state.insights));
+  } else if (state.status === "note") {
+    main.append(el("h2", {}, state.note.title), el("pre", { class: "note-text" }, state.note.text));
+  } else if (state.status === "settings") {
+    main.append(...renderSettings());
   } else if (state.status === "error") {
     main.append(el("div", { class: "error" }, state.error));
-    main.append(el("div", { class: "status muted" }, "Run `penwise doctor` in Terminal to check your setup."));
+    main.append(
+      el("div", { class: "status" },
+        el("button", { type: "button", class: "link", onclick: () => post({ action: "settings" }) }, "Open settings"),
+        el("span", { class: "muted" }, "  to check the model and API key"),
+      ),
+    );
   } else if (state.status === "ready") {
+    if (state.tips && state.changes.length) {
+      main.append(el("div", { class: "tips" },
+        "Click a change to undo it. Not sure how to say something? Write it in your own language, ",
+        "[[like this]], or leave [[?]] for a word."));
+    }
     for (const warning of state.warnings) main.append(el("div", { class: "banner" }, warning));
     main.append(renderText());
     if (state.changes.length) {
       const title = `${state.changes.length} change${state.changes.length === 1 ? "" : "s"}` + (state.explaining ? " · explaining…" : "");
       main.append(el("h2", {}, title), renderChanges());
     } else if (!state.warnings.length) {
-      main.append(el("div", { class: "good" }, "Looks good. No changes suggested."));
+      main.append(el("div", { class: "good" }, "Looks good. No changes needed."));
     }
   }
 
-  const ready = state.status === "ready";
-  document.getElementById("replace").disabled = !ready;
-  document.getElementById("copy").disabled = !ready;
-  document.getElementById("hint").textContent = ready && state.changes.length ? "Click a change, or press its number, to undo it." : "";
+  const reading = state.status === "insights" || state.status === "note" || state.status === "settings";
+  const button = document.getElementById("primary");
+  button.firstChild.textContent = primaryLabel();
+  button.disabled = state.status === "loading" || state.status === "idle" || state.saving;
+  document.getElementById("modes").hidden = reading;
+  // Improve's tone: guessed from the app, one click to change.
+  document.getElementById("tones").hidden = reading || state.mode !== "improve";
+  if (state.status !== "idle") reportSize();
+}
+
+// Tell Hammerspoon how tall the content is, so the window fits it: a short text gets a
+// small panel. `viewport` lets it work out how much the window adds (the title bar).
+let reportedHeight = 0;
+
+function reportSize() {
+  const main = document.getElementById("main");
+  main.style.flex = "none"; // as tall as its content, for a moment
+  const height = document.querySelector("header").offsetHeight + main.offsetHeight +
+    document.querySelector("footer").offsetHeight;
+  main.style.flex = "";
+  if (Math.abs(height - reportedHeight) > 2) {
+    reportedHeight = height;
+    post({ action: "size", height, viewport: window.innerHeight });
+  }
 }
 
 function setMode(mode) {
-  if (mode !== state.mode && state.status !== "idle") post({ action: "mode", mode });
+  if (mode !== state.mode && state.original && state.status !== "note") post({ action: "mode", mode });
+}
+
+function setStyle(style) {
+  if (style !== state.style && state.original && state.mode === "improve") post({ action: "style", style });
 }
 
 function replace() {
@@ -318,6 +631,27 @@ function replace() {
     before, after, category, context_before, context_after,
   }));
   post({ action: "replace", text: finalText(), changes: accepted });
+}
+
+// One button for whatever comes next: Replace (or Copy), Try again, or Done. Return presses it.
+function primaryLabel() {
+  if (state.status === "settings") return state.saved && state.saved.ok ? "Done" : "Save";
+  if (state.status === "error") return "Try again";
+  if (state.status === "loading" || (state.status === "ready" && state.changes.length)) {
+    return state.readonly ? "Copy" : "Replace";
+  }
+  return "Done";
+}
+
+function primary() {
+  if (state.status === "settings" && !(state.saved && state.saved.ok)) saveSettings();
+  else if (state.status === "error") retry();
+  else if (state.status === "ready" && state.changes.length) state.readonly ? copy() : replace();
+  else if (state.status !== "loading" && state.status !== "idle") post({ action: "cancel" });
+}
+
+function retry() {
+  if (state.status === "error" && state.original) post({ action: "retry", mode: state.mode });
 }
 
 function copy() {
@@ -329,20 +663,34 @@ window.penwise = {
   receive(event) {
     switch (event.type) {
       case "begin":
+        stopTimers();
         Object.assign(state, {
-          status: "loading", original: event.original, mode: event.mode,
+          status: "loading", original: event.original, mode: event.mode, startedAt: Date.now(), elapsedMs: 0,
+          readonly: Boolean(event.readonly),
           segments: [], changes: [], undone: new Set(), warnings: [], error: "", explaining: false,
         });
+        ticker = setInterval(() => {
+          const progress = document.getElementById("progress");
+          if (progress) progress.textContent = progressText();
+        }, 250);
         break;
       case "start":
         state.model = event.model;
+        state.style = event.style || "academic";
+        state.tips = Boolean(event.tips);
         state.explain = Boolean(event.explain);
         break;
       case "result":
+        stopTimers();
         Object.assign(state, {
           status: "ready", segments: event.segments, changes: event.changes, warnings: event.warnings,
-          explaining: state.explain && event.changes.length > 0,
+          explaining: state.explain && event.changes.length > 0, elapsedMs: event.elapsed_ms,
+          // Changes to numbers, citations, acronyms, math, code or links start out not applied.
+          undone: new Set(event.changes.filter((c) => c.risk).map((c) => c.id)),
         });
+        if (!event.changes.length && !event.warnings.length) {
+          autoClose = setTimeout(() => post({ action: "cancel" }), AUTO_CLOSE_MS);
+        }
         break;
       case "explanations":
         for (const change of state.changes) {
@@ -352,26 +700,74 @@ window.penwise = {
       case "done":
         state.explaining = false;
         break;
+      case "insights":
+        stopTimers();
+        Object.assign(state, { status: "insights", original: "", insights: event });
+        break;
+      case "note":
+        stopTimers();
+        Object.assign(state, { status: "note", original: "", note: { title: event.title, text: event.text } });
+        break;
       case "error":
+        stopTimers();
         Object.assign(state, { status: "error", error: event.message });
+        break;
+      case "settings":
+        stopTimers();
+        Object.assign(state, {
+          status: "settings", original: "", settings: event, saving: false, saved: null,
+          form: event.provider === LOCAL
+            ? { where: LOCAL, base_url: "", model: event.model }
+            : { where: "api", base_url: event.base_url, model: event.model },
+        });
+        break;
+      case "saved":
+        state.saving = false;
+        state.saved = event;
+        if (event.saved) {
+          // What was saved is now the current setting.
+          const provider = state.form.where === LOCAL ? LOCAL : "custom";
+          Object.assign(state.settings, { provider, base_url: state.form.base_url, model: state.form.model });
+          if (state.form.key) state.settings.has_key = true;
+          state.form.key = "";
+        }
+        if (event.saved) state.settings.configured = true;
+        break;
+      case "pasted":
+        state.form.key = event.text.trim();
+        break;
+      case "access":
+        if (state.settings) state.settings.access = event.allowed ? (state.settings.access === false ? "now" : true) : false;
         break;
     }
     render();
   },
 };
 
-document.querySelectorAll(".modes button").forEach((button) => {
+document.querySelectorAll("[data-mode]").forEach((button) => {
   button.addEventListener("click", () => setMode(button.dataset.mode));
 });
-document.getElementById("cancel").addEventListener("click", () => post({ action: "cancel" }));
-document.getElementById("copy").addEventListener("click", copy);
-document.getElementById("replace").addEventListener("click", replace);
+document.querySelectorAll("[data-style]").forEach((button) => {
+  button.addEventListener("click", () => setStyle(button.dataset.style));
+});
+document.getElementById("primary").addEventListener("click", primary);
+
+// A new width can change how the text wraps.
+window.addEventListener("resize", () => {
+  if (state.status !== "idle") reportSize();
+});
+
+// Any interaction keeps a "looks good" panel open.
+document.addEventListener("mousedown", () => clearTimeout(autoClose));
 
 document.addEventListener("keydown", (event) => {
+  clearTimeout(autoClose);
   const selection = String(window.getSelection());
+  // In the settings, keys type and move between fields as usual; Return saves, Esc closes.
+  if (state.status === "settings" && event.key !== "Enter" && event.key !== "Escape") return;
   if (event.key === "Enter") {
     event.preventDefault();
-    replace();
+    primary();
   } else if (event.key === "Escape") {
     event.preventDefault();
     post({ action: "cancel" });

@@ -3,7 +3,7 @@ import json
 
 import pytest
 
-from penwise import cli, history
+from penwise import cli, config, history
 
 
 def run(args, monkeypatch, capsys, stdin=""):
@@ -19,6 +19,13 @@ def test_check_text_format_prints_only_the_edit(server, isolated, monkeypatch, c
     )
     assert code == 0
     assert out == "This has an error.\n"
+
+
+def test_text_after_double_dash_is_kept_exactly(server, isolated, monkeypatch, capsys):
+    text = "-starts with a dash\nand have a error  "
+    code, out, _ = run(["check", "--base-url", server.url, "-f", "text", "--", text], monkeypatch, capsys)
+    assert code == 0
+    assert out == "-starts with a dash\nand has an error  "
 
 
 def test_check_jsonl_streams_events(server, isolated, monkeypatch, capsys):
@@ -65,9 +72,12 @@ def test_record_respects_the_history_setting(isolated, monkeypatch, capsys):
     run(["record"], monkeypatch, capsys, stdin=payload)
     assert len(history.load()) == 1
 
+    run(["record", payload], monkeypatch, capsys)  # as an argument, the way the Mac panel sends it
+    assert len(history.load()) == 2
+
     (isolated / "config.toml").write_text("history = false\n")
     run(["record"], monkeypatch, capsys, stdin=payload)
-    assert len(history.load()) == 1
+    assert len(history.load()) == 2
 
 
 def test_init_then_insights(isolated, monkeypatch, capsys):
@@ -87,3 +97,113 @@ def test_help(args, monkeypatch, capsys):
     with pytest.raises(SystemExit) as exit_info:
         run(args, monkeypatch, capsys)
     assert exit_info.value.code == 0
+
+
+def test_model_switch_is_tested_and_saved(server, isolated, monkeypatch, capsys):
+    config.set_values({"base_url": server.url, "model": "old-model"})
+    code, out, _ = run(["model", "openai/gpt-6-luna"], monkeypatch, capsys)
+    assert code == 0 and "Now using openai/gpt-6-luna" in out
+    cfg = config.load()
+    assert (cfg.model, cfg.reasoning_effort) == ("openai/gpt-6-luna", "none")
+    assert server.requests[-1]["model"] == "openai/gpt-6-luna"
+
+    run(["model", "mistralai/mistral-small-2603"], monkeypatch, capsys)
+    assert config.load().reasoning_effort == ""  # Mistral Small doesn't think by default
+
+
+def test_a_model_that_fails_the_test_is_not_saved(server, isolated, monkeypatch, capsys):
+    config.set_values({"base_url": server.url, "model": "old-model"})
+    server.status = 404
+    code, out, _ = run(["model", "no/such-model"], monkeypatch, capsys)
+    assert code == 1 and "Still using old-model" in out
+    assert config.load().model == "old-model"
+
+
+def test_model_without_an_id_lists_suggestions(isolated, monkeypatch, capsys):
+    config.set_values({"base_url": "https://openrouter.ai/api/v1", "model": "x"})
+    _, out, _ = run(["model"], monkeypatch, capsys)
+    assert "mistralai/mistral-small-2603" in out
+
+
+def test_config_set_show_and_unset(isolated, monkeypatch, capsys):
+    run(["config", "set", "timeout", "30"], monkeypatch, capsys)
+    run(["config", "set", "explain", "yes"], monkeypatch, capsys)
+    assert (config.load().timeout, config.load().explain) == (30, True)
+    _, out, _ = run(["config"], monkeypatch, capsys)
+    assert "timeout           30" in out and "explain           true" in out
+    run(["config", "unset", "timeout"], monkeypatch, capsys)
+    assert config.load().timeout == 60
+
+
+def test_config_rejects_bad_input(isolated, monkeypatch, capsys):
+    code, _, err = run(["config", "set", "explain", "maybe"], monkeypatch, capsys)
+    assert code == 1 and "true or false" in err
+    code, _, err = run(["config", "set", "modle", "x"], monkeypatch, capsys)
+    assert code == 1 and "Unknown setting" in err
+
+
+def test_first_run_points_to_setup(isolated, monkeypatch, capsys):
+    class Terminal(io.StringIO):
+        def isatty(self):
+            return True
+
+    monkeypatch.setattr("sys.stdin", Terminal())
+    assert cli.main([]) == 0
+    assert "Run `penwise setup` to get started" in capsys.readouterr().out
+
+
+def test_keep_words(server, isolated, monkeypatch, capsys):
+    _, out, _ = run(["keep"], monkeypatch, capsys)
+    assert "No words kept yet" in out
+    run(["keep", "Pytorch", "ResNet"], monkeypatch, capsys)
+    run(["keep", "Pytorch"], monkeypatch, capsys)  # no duplicates
+    assert config.load().keep == ["Pytorch", "ResNet"]
+    run(["keep", "--remove", "ResNet"], monkeypatch, capsys)
+    assert config.load().keep == ["Pytorch"]
+    server.reply = lambda body: "We use PyTorch."
+    _, out, _ = run(["check", "We use Pytorch.", "--base-url", server.url, "-f", "text"], monkeypatch, capsys)
+    assert out == "We use Pytorch."
+
+
+def test_update_check(isolated, monkeypatch, capsys):
+    monkeypatch.setattr(cli.updater, "check", lambda: "2 new changes")
+    _, out, _ = run(["update", "--check", "--json"], monkeypatch, capsys)
+    assert json.loads(out) == {"available": True, "detail": "2 new changes"}
+    monkeypatch.setattr(cli.updater, "check", lambda: None)
+    _, out, _ = run(["update", "--check"], monkeypatch, capsys)
+    assert "up to date" in out
+
+
+def test_insights_as_json(isolated, monkeypatch, capsys):
+    history.record([{"before": "in", "after": "on", "category": "preposition", "context_before": "results "}] * 2)
+    _, out, _ = run(["insights", "--json"], monkeypatch, capsys)
+    data = json.loads(out)
+    assert data["total"] == 2
+    assert data["categories"][0]["label"] == "Prepositions"
+    assert "learn them in phrases" in data["categories"][0]["note"]
+    assert data["repeated"][0]["pair"] == "in → on"
+
+
+def test_improve_takes_its_tone_from_the_app(server, isolated, monkeypatch, capsys):
+    args = ["check", "Hi, can you check this?", "--base-url", server.url, "-f", "jsonl", "-m", "improve"]
+    _, out, _ = run([*args, "--app", "com.apple.mail"], monkeypatch, capsys)
+    assert json.loads(out.splitlines()[0])["style"] == "email"
+    assert "The text is an email" in server.requests[-1]["messages"][0]["content"]
+    _, out, _ = run([*args, "--style", "chat"], monkeypatch, capsys)
+    assert json.loads(out.splitlines()[0])["style"] == "chat"
+
+
+def test_tips_are_shown_to_new_users_only(server, isolated, monkeypatch, capsys):
+    args = ["check", "This have a error.", "--base-url", server.url, "-f", "jsonl"]
+    _, out, _ = run(args, monkeypatch, capsys)
+    assert json.loads(out.splitlines()[0])["tips"] is True
+    history.record([{"before": "a", "after": "an", "category": "article"}] * 3)
+    _, out, _ = run(args, monkeypatch, capsys)
+    assert json.loads(out.splitlines()[0])["tips"] is False
+
+
+def test_try_opens_the_practice_note_on_a_mac(isolated, monkeypatch, capsys):
+    monkeypatch.setattr(cli.platform, "system", lambda: "Darwin")
+    monkeypatch.setattr(cli.setup_mac.subprocess, "run", lambda command, **kwargs: None)
+    _, out, _ = run(["try"], monkeypatch, capsys)
+    assert "Try Penwise.txt" in out and (isolated / "Try Penwise.txt").exists()

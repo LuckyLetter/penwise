@@ -14,6 +14,24 @@ from dataclasses import asdict, dataclass
 # and single punctuation characters. Joining the tokens gives back the text.
 _TOKEN = re.compile(r"\w+(?:['’]\w+)*|\s+|[^\w\s]")
 WORD = re.compile(r"\w+(?:['’]\w+)*")
+_NOTE = re.compile(r"\[\[.*?\]\]", re.DOTALL)
+
+# Signs that part of the text should be filled in in English: a [[note]], or letters
+# from scripts other than Latin and Greek (Greek letters are common in math).
+NEEDS_FILL = re.compile(
+    r"\[\["
+    "|["
+    "\u0400-\u04ff"  # Cyrillic
+    "\u0590-\u06ff"  # Hebrew, Arabic
+    "\u0900-\u097f"  # Devanagari
+    "\u0e00-\u0e7f"  # Thai
+    "\u1100-\u11ff\uac00-\ud7af"  # Hangul
+    "\u3000-\u30ff"  # CJK punctuation, Hiragana, Katakana
+    "\u3400-\u9fff"  # CJK ideographs
+    "\uff00-\uffef"  # full-width forms
+    "]"
+)
+
 
 CONTEXT_CHARS = 40
 
@@ -27,6 +45,7 @@ class Change:
     label: str = ""
     note: str = ""
     reason: str | None = None
+    risk: str | None = None  # what the change would alter (e.g. "a number"); such changes aren't applied by default
     context_before: str = ""
     context_after: str = ""
     seen: int = 0
@@ -62,6 +81,8 @@ def diff(original: str, edited: str, first_id: int = 0) -> tuple[list, list[Chan
             blocks.append([kind, before, after])
 
     blocks = _keep_line_breaks(blocks)
+    for match in _NOTE.finditer(original):
+        blocks = _merge_span(blocks, *match.span())
     blocks = _bridge_rephrasings(blocks)
 
     segments: list = []
@@ -135,11 +156,14 @@ def _bridge_rephrasings(blocks: list[list]) -> list[list]:
     def is_rewrite(block: list) -> bool:
         return max(word_count(block[1]), word_count(block[2])) >= 2
 
+    def is_filled(block: list) -> bool:
+        return bool(NEEDS_FILL.search(block[1]))
+
     def should_join(gap: str, left: list, right: list) -> bool:
         if "\n" in gap:
             return False
         if not gap.strip():
-            return is_rewrite(left) or is_rewrite(right)
+            return is_rewrite(left) or is_rewrite(right) or is_filled(left) or is_filled(right)
         return word_count(gap) <= 1 and is_rewrite(left) and is_rewrite(right)
 
     out: list[list] = []
@@ -162,6 +186,43 @@ def _bridge_rephrasings(blocks: list[list]) -> list[list]:
         out.append(list(block))
         i += 1
     return out
+
+
+def _merge_span(blocks: list[list], start: int, end: int) -> list[list]:
+    """Turn everything in original[start:end] (a [[note]]) into one change, if any of it changed."""
+    before_span, inside, after_span = [], ["change", "", ""], []
+    changed = False
+    pos = 0
+    for kind, before, after in blocks:
+        b_start, b_end = pos, pos + len(before)
+        pos = b_end
+        if b_end < start or (b_end == start and before):
+            before_span.append([kind, before, after])
+        elif b_start > end or (b_start == end and before):
+            after_span.append([kind, before, after])
+        elif kind == "change":
+            inside[1] += before
+            inside[2] += after
+            changed = True
+        else:  # unchanged text that is partly inside the note: split it
+            cut_start, cut_end = max(0, start - b_start), max(0, end - b_start)
+            head, mid, tail = before[:cut_start], before[cut_start:cut_end], before[cut_end:]
+            if head:
+                before_span.append(["same", head, head])
+            inside[1] += mid
+            inside[2] += mid
+            if tail:
+                after_span.append(["same", tail, tail])
+    if not changed:
+        return blocks
+    merged: list[list] = []
+    for block in [*before_span, inside, *after_span]:
+        if merged and merged[-1][0] == block[0] == "same":
+            merged[-1][1] += block[1]
+            merged[-1][2] += block[2]
+        else:
+            merged.append(block)
+    return merged
 
 
 def _context_before(text: str, pos: int) -> str:
