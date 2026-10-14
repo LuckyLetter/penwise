@@ -32,6 +32,10 @@ def describe() -> dict:
         "base_url": cfg.base_url,
         "model": cfg.model,
         "has_key": bool(cfg.api_key or cfg.api_key_env or cfg.api_key_command),
+        # For the window to fill in: the models already on this Mac, and the address that goes
+        # with a key.
+        "installed": sorted(name for name in ollama.models() if "embed" not in name),
+        "key_prefixes": [{"prefix": prefix, "base_url": url} for prefix, url in presets.KEY_PREFIXES],
         "providers": [
             {
                 "key": p.key,

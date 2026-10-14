@@ -439,3 +439,38 @@ def test_the_first_time_settings_work_they_say_what_to_do_next(page):
     page.locator("#primary").click()
     send(page, {"type": "saved", "saved": True, "ok": True, "before": "a eror", "after": "an error", "seconds": 0.8})
     assert page.locator("#next").count() == 0
+
+
+def test_settings_offer_the_models_already_on_this_mac_first(page):
+    send(page, {**SETTINGS, "installed": ["llama3.2:1b", "qwen3:4b"]})
+    choice = page.locator("#model-choice")
+    assert choice.input_value() == "llama3.2:1b"  # already there: nothing to download
+    assert "qwen3:4b · on your Mac" in choice.locator("option").all_inner_texts()
+    page.locator("#primary").click()
+    assert sent(page)[-1]["settings"]["model"] == "llama3.2:1b"
+
+    send(page, {**SETTINGS, "configured": True, "installed": ["llama3.2:1b"]})
+    assert page.locator("#model-choice").input_value() == "gemma3:1b"  # the model you chose stays
+
+
+KEY_PREFIXES = [
+    {"prefix": "sk-or-", "base_url": "https://openrouter.ai/api/v1"},
+    {"prefix": "gsk_", "base_url": "https://api.groq.com/openai/v1"},
+]
+
+
+def test_settings_fill_in_the_address_that_goes_with_a_key(page):
+    send(page, {**SETTINGS, "key_prefixes": KEY_PREFIXES})
+    page.get_by_role("button", name="API").click()
+    page.locator("#key").fill("sk-or-v1-abc")
+    assert page.locator("#base_url").input_value() == "https://openrouter.ai/api/v1"
+    assert page.get_by_role("button", name="Get a key").count() == 1  # and it knows the service
+    assert page.locator("#suggested-models option").count() == 2
+
+    page.locator("#base_url").fill("https://example.org/v1")  # an address you typed stays
+    page.locator("#key").fill("gsk_abc")
+    assert page.locator("#base_url").input_value() == "https://example.org/v1"
+
+    page.locator("#base_url").fill("")
+    send(page, {"type": "pasted", "text": "gsk_abc\n"})  # the Paste button
+    assert page.locator("#base_url").input_value() == "https://api.groq.com/openai/v1"

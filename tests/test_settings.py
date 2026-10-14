@@ -168,3 +168,10 @@ def test_ollama_downloads_report_their_progress(monkeypatch):
 def test_a_model_without_a_tag_is_its_latest_version():
     assert ollama.has_model("llama3.2", {"llama3.2:latest"})
     assert not ollama.has_model("llama3.2:1b", {"llama3.2:latest"})
+
+
+def test_the_window_learns_the_models_on_this_mac_and_the_key_prefixes(isolated, monkeypatch):
+    monkeypatch.setattr(ollama, "models", lambda: {"qwen3:4b", "nomic-embed-text:latest", "gemma3:1b"})
+    data = settings.describe()
+    assert data["installed"] == ["gemma3:1b", "qwen3:4b"]  # not models that only embed text
+    assert {"prefix": "sk-or-", "base_url": "https://openrouter.ai/api/v1"} in data["key_prefixes"]

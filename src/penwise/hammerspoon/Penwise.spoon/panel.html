@@ -440,13 +440,46 @@ function addressChanged(event) {
   document.getElementById("suggested-models").replaceChildren(...suggestedModels());
 }
 
+// A key that shows its service (sk-or-… is OpenRouter's) fills in the address, if it's empty.
+function addressFromKey() {
+  if ((state.form.base_url || "").trim()) return false;
+  const key = (state.form.key || "").trim();
+  const known = (state.settings.key_prefixes || []).find((k) => key.startsWith(k.prefix));
+  if (known) state.form.base_url = known.base_url;
+  return Boolean(known);
+}
+
+function keyChanged(event) {
+  state.form.key = event.target.value;
+  if (addressFromKey()) {
+    document.getElementById("base_url").value = state.form.base_url;
+    addressChanged({ target: { value: state.form.base_url } });
+  }
+}
+
+// The models to choose from on this Mac: Penwise's suggestions, then others already there.
+function localModels() {
+  const installed = state.settings.installed || [];
+  const has = (id) => installed.includes(id) || installed.includes(`${id}:latest`);
+  const suggested = state.settings.providers.find((p) => p.key === LOCAL).models
+    .map((m) => ({ ...m, installed: has(m.id) }));
+  const others = installed.filter((id) => !suggested.some((m) => m.id === id || `${m.id}:latest` === id))
+    .map((id) => ({ id, blurb: "", installed: true }));
+  return [...suggested, ...others];
+}
+
+// One already on this Mac if there is one: nothing to download.
+function firstLocalModel() {
+  const models = localModels();
+  return (models.find((m) => m.installed) || models[0]).id;
+}
+
 function chooseWhere(where) {
   const saved = (state.settings.provider === LOCAL) === (where === LOCAL);
-  const local = state.settings.providers.find((p) => p.key === LOCAL);
   state.form = {
     ...state.form, where,
     base_url: where === LOCAL ? "" : (saved ? state.settings.base_url : ""),
-    model: saved ? state.settings.model : (where === LOCAL ? local.models[0].id : ""),
+    model: saved ? state.settings.model : (where === LOCAL ? firstLocalModel() : ""),
     otherModel: false,
   };
   state.saved = null;
@@ -461,7 +494,6 @@ function input(attrs, field) {
 
 function renderSettings() {
   const local = state.form.where === LOCAL;
-  const service = local ? state.settings.providers.find((p) => p.key === LOCAL) : knownService();
   const keySaved = state.settings.has_key && state.settings.provider !== LOCAL;
   const parts = [
     el("div", { class: "title" }, state.settings.configured ? "Settings" : "Welcome to Penwise"),
@@ -493,15 +525,15 @@ function renderSettings() {
       }),
       el("label", { for: "key" }, "API key"),
       el("div", { class: "row" },
-        input({ id: "key", type: "password", autocomplete: "off",
-          placeholder: keySaved ? "Saved in your Keychain" : "Paste your key" }, "key"),
+        el("input", { id: "key", type: "password", autocomplete: "off", value: state.form.key || "",
+          placeholder: keySaved ? "Saved in your Keychain" : "Paste your key", oninput: keyChanged }),
         el("button", { type: "button", class: "secondary", onclick: () => post({ action: "paste-key" }) }, "Paste"),
       ),
       el("div", { class: "hint", id: "key-hint" }, ...keyHint()),
     );
   }
   parts.push(el("label", { for: local ? "model-choice" : "model-id" }, "Model"));
-  const models = local ? service.models : [];
+  const models = local ? localModels() : [];
   const listed = models.some((m) => m.id === state.form.model);
   if (local) {
     const select = el("select", { id: "model-choice", onchange: (event) => {
@@ -509,7 +541,8 @@ function renderSettings() {
       state.form.model = state.form.otherModel ? "" : event.target.value;
       render();
     } },
-    ...models.map((m) => el("option", { value: m.id }, `${m.id} · ${m.blurb}`)),
+    ...models.map((m) => el("option", { value: m.id },
+      [m.id, m.blurb, m.installed && "on your Mac"].filter(Boolean).join(" · "))),
     el("option", { value: OTHER_MODEL }, "Another model…"));
     select.value = listed && !state.form.otherModel ? state.form.model : OTHER_MODEL;
     parts.push(select);
@@ -726,10 +759,11 @@ window.penwise = {
         stopTimers();
         Object.assign(state, {
           status: "settings", original: "", settings: event, saving: false, saved: null, firstRun: !event.configured,
-          form: event.provider === LOCAL
-            ? { where: LOCAL, base_url: "", model: event.model }
-            : { where: "api", base_url: event.base_url, model: event.model },
         });
+        state.form = event.provider === LOCAL
+          // The first time, a model already on this Mac if there is one.
+          ? { where: LOCAL, base_url: "", model: event.configured ? event.model : firstLocalModel() }
+          : { where: "api", base_url: event.base_url, model: event.model };
         break;
       case "saved":
         state.saving = false;
@@ -745,6 +779,7 @@ window.penwise = {
         break;
       case "pasted":
         state.form.key = event.text.trim();
+        addressFromKey();
         break;
       case "saving": // a step that takes a while, like downloading the model
         state.savingText = event.text;

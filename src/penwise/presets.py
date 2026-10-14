@@ -70,6 +70,17 @@ CUSTOM = Provider(
 
 PROVIDERS = (OPENROUTER, OLLAMA, CUSTOM)
 
+# Services whose API keys start in their own way, and their OpenAI-compatible address:
+# paste a key, and the settings window fills in where it goes.
+KEY_PREFIXES = (
+    ("sk-or-", OPENROUTER.base_url),
+    ("sk-proj-", "https://api.openai.com/v1"),
+    ("sk-ant-", "https://api.anthropic.com/v1"),
+    ("gsk_", "https://api.groq.com/openai/v1"),
+    ("AIza", "https://generativelanguage.googleapis.com/v1beta/openai"),
+    ("xai-", "https://api.x.ai/v1"),
+)
+
 
 def reasoning_effort_for(model_id: str) -> str:
     """The "thinking" setting Penwise recommends for a model ("" means the model's default)."""
