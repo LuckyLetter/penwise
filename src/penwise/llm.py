@@ -18,9 +18,12 @@ from penwise.config import Config
 
 
 class LLMError(Exception):
-    def __init__(self, message: str, status: int | None = None):
+    """`in_settings`: the fix is in Penwise's settings (the key, the model, the address)."""
+
+    def __init__(self, message: str, status: int | None = None, in_settings: bool = False):
         super().__init__(message)
         self.status = status
+        self.in_settings = in_settings
 
 
 # Settings some models refuse (e.g. reasoning models that only take their default
@@ -95,23 +98,27 @@ class ChatClient:
             with urllib.request.urlopen(request, timeout=self.timeout, context=ssl_context()) as response:
                 return json.loads(response.read().decode("utf-8"))
         except urllib.error.HTTPError as exc:
-            raise LLMError(self._http_error_message(exc), status=exc.code) from exc
-        except TimeoutError as exc:
             raise LLMError(
-                f"The model took longer than {self.timeout:g}s to answer. "
-                "Try a shorter selection, or raise `timeout` in the config."
+                self._http_error_message(exc), status=exc.code, in_settings=exc.code in (401, 403, 404)
             ) from exc
-        except urllib.error.URLError as exc:
-            if isinstance(exc.reason, (socket.timeout, TimeoutError)):
-                raise LLMError(f"The model took longer than {self.timeout:g}s to answer.") from exc
+        except (TimeoutError, urllib.error.URLError) as exc:
+            if isinstance(exc, TimeoutError) or isinstance(exc.reason, (socket.timeout, TimeoutError)):
+                raise LLMError(
+                    f"The model took longer than {self.timeout:g}s to answer. "
+                    "Try a shorter text, or a faster model in the settings.",
+                    in_settings=True,
+                ) from exc
             raise LLMError(self._connection_message(exc)) from exc
         except json.JSONDecodeError as exc:
-            raise LLMError(f"{url} did not answer with JSON. Is base_url right? It usually ends in /v1.") from exc
+            raise LLMError(
+                f"{url} did not answer with JSON. Check the address in the settings: it usually ends in /v1.",
+                in_settings=True,
+            ) from exc
 
     def _connection_message(self, exc: urllib.error.URLError) -> str:
         msg = f"Could not reach {self.base_url} ({exc.reason})."
         if ":11434" in self.base_url:
-            msg += " Is Ollama running? Open the Ollama app or run `ollama serve`."
+            msg += " Is Ollama running? Open the Ollama app."
         elif ":1234" in self.base_url:
             msg += " Is the LM Studio server started (Developer tab → Start server)?"
         elif "localhost" in self.base_url or "127.0.0.1" in self.base_url:
@@ -127,13 +134,15 @@ class ChatClient:
         except (ValueError, AttributeError):
             pass
         if exc.code in (401, 403):
-            hint = "Run `penwise setup` to save a new key."
-            return f"The server refused the API key ({exc.code}). {hint} {detail}".strip()
+            return f"The service refused the API key ({exc.code}). Paste a new key in the settings. {detail}".strip()
         if exc.code == 402:
-            return f"Your account is out of credits (402). Add credits with your provider. {detail}".strip()
+            return f"Your account is out of credits (402). Add credits on your service's website. {detail}".strip()
         if exc.code == 404:
-            hint = f" For Ollama, run: ollama pull {self.model}" if ":11434" in self.base_url else ""
-            return f"Model or endpoint not found ({self.model} at {self.base_url}).{hint} {detail}".strip()
+            if ":11434" in self.base_url:
+                hint = "To download it, choose it in the settings and press Save."
+            else:
+                hint = "Check the model's name in the settings."
+            return f"Model or endpoint not found ({self.model} at {self.base_url}). {hint} {detail}".strip()
         if exc.code == 429:
             return f"Rate limited by the server (429). Wait a moment and try again. {detail}".strip()
         return f"The server answered with an error ({exc.code}). {detail}".strip()

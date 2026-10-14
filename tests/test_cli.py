@@ -61,6 +61,15 @@ def test_errors_are_reported_in_jsonl_and_stderr(isolated, monkeypatch, capsys):
     assert err.startswith("penwise: Could not reach")
 
 
+def test_in_the_terminal_an_error_fixed_in_the_settings_says_how_to_get_there(server, isolated, monkeypatch, capsys):
+    server.status = 401
+    code, _, err = run(["check", "Hi.", "--base-url", server.url], monkeypatch, capsys)
+    assert code == 1
+    first, second = err.splitlines()
+    assert first.startswith("penwise: The service refused the API key (401). Paste a new key in the settings.")
+    assert second == "To change the settings, run `penwise setup`."
+
+
 def test_empty_input_is_an_error(isolated, monkeypatch, capsys):
     code, _, err = run(["check", "-f", "text"], monkeypatch, capsys, stdin="   ")
     assert code == 1

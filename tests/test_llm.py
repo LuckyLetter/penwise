@@ -60,14 +60,16 @@ def test_a_busy_server_is_asked_once_more(server, monkeypatch):
 def test_missing_model_suggests_a_fix(server):
     server.status = 404
     server.error = {"error": {"message": 'model "x" not found'}}
-    with pytest.raises(LLMError, match='model "x" not found'):
+    with pytest.raises(LLMError, match='model "x" not found') as error:
         ChatClient(server.url, "x").chat("s", [])
+    assert "Check the model's name in the settings." in str(error.value)
 
 
 def test_rejected_key_is_explained(server):
     server.status = 401
-    with pytest.raises(LLMError, match="refused the API key"):
+    with pytest.raises(LLMError, match="refused the API key") as error:
         ChatClient(server.url, "m").chat("s", [])
+    assert "Paste a new key in the settings." in str(error.value) and error.value.in_settings
 
 
 def test_unreachable_ollama_says_how_to_start_it():

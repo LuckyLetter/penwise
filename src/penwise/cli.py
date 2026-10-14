@@ -35,6 +35,8 @@ def main(argv: list[str] | None = None) -> int:
         if getattr(args, "format", None) == "jsonl":
             print(json.dumps({"type": "error", "message": str(exc)}), flush=True)
         print(f"penwise: {exc}", file=sys.stderr)
+        if getattr(exc, "in_settings", False):  # the panel has a link to them; here, the command
+            print("To change the settings, run `penwise setup`.", file=sys.stderr)
         return 1
     except EOFError:
         print("\npenwise: this command asks questions, so run it in a terminal.", file=sys.stderr)
