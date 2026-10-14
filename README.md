@@ -4,7 +4,7 @@ Click in any text box on your Mac and press **⌃⌥P**. Penwise shows what's wr
 explanation of each change. Press **Return**, and your text is fixed.
 
 Penwise is made for research and professional writing by non-native speakers. It aims to teach as well as correct:
-every change comes with a short note, and the fixes you make again and again show up in `penwise insights`.
+every change comes with a short note, and the fixes you make again and again show up in *Your recurring fixes*.
 
 It works with a cloud model you have an API key for, or a small local model (such as a 1B model on an M1 Mac).
 Setup is one download: open it, choose a model, and you're done.
@@ -26,39 +26,6 @@ Setup is one download: open it, choose a model, and you're done.
   <source media="(prefers-color-scheme: dark)" srcset="docs/panel-dark.png">
   <img src="docs/panel-light.png" width="640" alt="The Penwise review panel: the text with each change marked, and a list of the changes with a label and a short note for each.">
 </picture>
-
-## How it works
-
-```
- Any Mac app (a text box, a selection, or the paragraph at the cursor)
-        │  ⌃⌥P fix  ·  ⌃⌥⇧P improve  ·  ⌃⌥⌘P quick fix
-        ▼
- Hammerspoon Spoon (Lua)          reads the text, shows the review panel at it, pastes the result
-        │  text as an argument → JSON lines
-        ▼
- penwise (Python)
-   engine.py    split into paragraphs → ask the model (in parallel) → clean → sanity-check → diff
-   prompts.py   short prompts with examples, tuned on 1B models
-   llm.py       one client for every model: the OpenAI-compatible chat API
-   diff.py      word-level diff, computed in code, not by the model
-   lessons.py   a label and a fixed teaching note for each change
-   history.py   a local log of accepted fixes → "you've made this fix 3× before"
-   wizard.py    `penwise setup`: model, key (Keychain), hotkey, all in one go
-        │  HTTP
-        ▼
- Ollama / LM Studio / llama.cpp / MLX on your Mac   — or —   OpenAI / OpenRouter / Groq / …
-```
-
-Three design rules keep it trustworthy:
-
-- **The model only rewrites; Penwise works out the changes.** The list of changes is computed by diffing your text
-  against the model's version, so what you see is exactly what will change. You can undo any single change.
-- **If the model replies to your text instead of editing it, Penwise doesn't use that reply.** Small models sometimes
-  answer a question in your text, or rewrite it completely. Penwise checks each reply and, if it doesn't look like an
-  edit of your text, leaves that part unchanged and tells you.
-- **Explanations are written in advance, not generated.** Each change gets a label (Articles, Prepositions, Word
-  form, Commonly confused, …) and a fixed note. You can also ask the model for a one-line reason per change, but this
-  is off by default because 1B models often give wrong ones.
 
 ## Quick start (macOS)
 
@@ -184,7 +151,7 @@ gives better corrections, and its one-line explanations are worth turning on (`e
 suggests, Penwise turns that down automatically (`reasoning_effort`). For a hotkey tool, a fast model that doesn't
 think by default, like `mistralai/mistral-small-2603`, feels best.
 
-**API keys:** Settings (and `penwise setup`) store the key in the macOS Keychain and points the config at it with
+**API keys:** Settings (and `penwise setup`) store the key in the macOS Keychain and point the config at it with
 `api_key_command = "security find-generic-password -s penwise -w"`. `api_key_env = "SOME_VAR"` and
 `api_key = "..."` also work. Local servers need no key.
 
@@ -211,14 +178,17 @@ with every setting explained. All settings:
 
 ## Learning from your changes
 
+*Your recurring fixes* in the ✎ menu shows the rules you need most, each with an example from your own writing.
+In the Terminal:
+
 ```console
 $ penwise insights
 42 accepted changes since 2026-10-12
 
 What you fix most:
     14  Articles
-     9  Prepositions
-     7  Word form
+     9  Subject–verb agreement   e.g. …each of the models [are] tested…
+     7  Prepositions
 
 Fixes you've made more than once:
      5× in → on
@@ -274,6 +244,42 @@ full screen. Other apps work the same way when they let other apps read their te
 - If the hotkey doesn't do what you expect, choose *Check my setup* in the ✎ menu (`penwise doctor` in the
   Terminal): it ends with what the hotkey did, step by step (the app, the kind of text box, what was selected and
   pasted, and whether the whole fix arrived; never your text).
+
+## How it works
+
+```
+ Any Mac app (a text box, a selection, or the paragraph at the cursor)
+        │  ⌃⌥P fix  ·  ⌃⌥⇧P improve  ·  ⌃⌥⌘P quick fix
+        ▼
+ Hammerspoon Spoon (Lua)          reads the text, shows the review panel at it, pastes the result
+        │  text as an argument → JSON lines
+        ▼
+ penwise (Python)
+   engine.py    split into paragraphs → ask the model (in parallel) → clean → sanity-check → diff
+   prompts.py   short prompts with examples, tuned on 1B models
+   llm.py       one client for every model: the OpenAI-compatible chat API
+   diff.py      word-level diff, computed in code, not by the model
+   lessons.py   a label and a fixed teaching note for each change, naming the grammar rule
+   history.py   a local log of accepted fixes → "Your recurring fixes", "you've made this fix 3× before"
+   settings.py  the settings window: model, key (Keychain), Ollama started, models listed
+   wizard.py    `penwise setup`: the same, in the Terminal
+   setup_mac.py the hotkey: Hammerspoon (downloaded if needed) and the Spoon
+   updater.py   updates; uninstall.py removes it all  ·  installer/  Install Penwise.app
+        │  HTTP
+        ▼
+ Ollama / LM Studio / llama.cpp / MLX on your Mac   — or —   OpenAI / OpenRouter / Groq / …
+```
+
+Three design rules keep it trustworthy:
+
+- **The model only rewrites; Penwise works out the changes.** The list of changes is computed by diffing your text
+  against the model's version, so what you see is exactly what will change. You can undo any single change.
+- **If the model replies to your text instead of editing it, Penwise doesn't use that reply.** Small models sometimes
+  answer a question in your text, or rewrite it completely. Penwise checks each reply and, if it doesn't look like an
+  edit of your text, leaves that part unchanged and tells you.
+- **Explanations are written in advance, not generated.** Each change gets a label (Articles, Prepositions, Word
+  form, Commonly confused, …) and a fixed note. You can also ask the model for a one-line reason per change, but this
+  is off by default because 1B models often give wrong ones.
 
 ## Development
 
