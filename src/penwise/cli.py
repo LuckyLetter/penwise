@@ -12,7 +12,6 @@ import time
 
 from penwise import __version__, config, engine, history, presets, render, settings, setup_mac, updater, wizard
 from penwise.config import ConfigError
-from penwise.lessons import LABELS, NOTES
 from penwise.llm import ChatClient, LLMError
 
 FORMATS = ("pretty", "text", "json", "jsonl")
@@ -256,9 +255,7 @@ def cmd_insights(args: argparse.Namespace) -> int:
                 {
                     "total": data["total"],
                     "since": (data["first"] or "")[:10],
-                    "categories": [
-                        {"label": LABELS.get(c, c), "count": n, "note": NOTES.get(c, "")} for c, n in data["categories"]
-                    ],
+                    "categories": [{"label": title, "count": n, "note": note} for title, note, n in data["lessons"]],
                     "repeated": [{"pair": pair, "count": n, "example": ex} for pair, n, ex in data["repeated"]],
                 },
                 ensure_ascii=False,
@@ -270,8 +267,8 @@ def cmd_insights(args: argparse.Namespace) -> int:
         return 0
     print(f"{data['total']} accepted changes since {data['first'][:10]}\n")
     print("What you fix most:")
-    for category, n in data["categories"]:
-        print(f"  {n:>4}  {LABELS.get(category, category)}")
+    for title, _, n in data["lessons"]:
+        print(f"  {n:>4}  {title}")
     if data["repeated"]:
         print("\nFixes you've made more than once:")
         for pair, n, example in data["repeated"]:

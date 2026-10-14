@@ -236,6 +236,20 @@ BASE_FORM_AFTER = {
 }
 COMPARATIVES = {"better", "best", "worse", "worst", "less", "least", "more", "most"}
 
+# Short titles for the points with a note of their own, in the panel and in "Your recurring fixes".
+RULE_TITLES = {
+    AGREEMENT_NOTE: "Subject–verb agreement",
+    DEMONSTRATIVE_NOTE: "this/these, that/those",
+    BASE_FORM_NOTE: "Base form of the verb",
+    BE_VERB_NOTE: "No “is” before a verb",
+    PAST_TIME_NOTE: "Past tense",
+    DOUBLE_COMPARISON_NOTE: "Double comparison",
+    ALTHOUGH_BUT_NOTE: "Although … but",
+    CAN_ABLE_NOTE: "can / be able to",
+    POSSESSIVE: "Possessives",
+    A_AN_NOTE: "a or an",
+}
+
 
 def words(text: str) -> list[str]:
     return [w.lower().replace("’", "'") for w in WORD.findall(text)]
@@ -294,12 +308,17 @@ def classify(before: str, after: str, context_before: str = "", context_after: s
     return "rephrased", NOTES["rephrased"]
 
 
+def label(category: str, note: str) -> str:
+    """The title for a change: the grammar point when it has a note of its own, else its kind."""
+    return RULE_TITLES.get(note, LABELS[category])
+
+
 def annotate(changes: list[Change]) -> None:
     for change in changes:
         change.category, change.note = classify(
             change.before, change.after, change.context_before, change.context_after
         )
-        change.label = LABELS[change.category]
+        change.label = label(change.category, change.note)
 
 
 def _grammar_point(bw: list[str], aw: list[str], previous: list[str], following: list[str], context_before: str):

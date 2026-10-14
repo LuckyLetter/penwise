@@ -13,6 +13,7 @@ from collections import Counter
 from datetime import datetime, timezone
 from pathlib import Path
 
+from penwise import lessons
 from penwise.diff import Change
 
 
@@ -78,9 +79,19 @@ def mark_seen(changes: list[Change], path: Path | None = None) -> None:
         change.seen = counts.get(pair_key(change.before, change.after), 0)
 
 
+def lesson(entry: dict) -> tuple[str, str]:
+    """The (title, note) of a fix you accepted, worked out again from the fix and the words around it."""
+    before, after = entry.get("before", ""), entry.get("after", "")
+    around_before, found, around_after = entry.get("context", "").partition(f"[{before}]")
+    if not found:
+        around_before = around_after = ""
+    category, note = lessons.classify(before, after, around_before, around_after)
+    return lessons.label(category, note), note
+
+
 def insights(path: Path | None = None, limit: int = 8) -> dict:
     entries = load(path)
-    categories = Counter(e.get("category") or "other" for e in entries)
+    by_lesson = Counter(lesson(e) for e in entries)
     pairs = Counter(pair_key(e.get("before", ""), e.get("after", "")) for e in entries)
     examples: dict[str, str] = {}
     for e in reversed(entries):  # newest example wins
@@ -88,7 +99,7 @@ def insights(path: Path | None = None, limit: int = 8) -> dict:
     return {
         "total": len(entries),
         "first": entries[0].get("time") if entries else None,
-        "categories": categories.most_common(limit),
+        "lessons": [(title, note, n) for (title, note), n in by_lesson.most_common(limit)],
         "repeated": [(k, n, examples.get(k, "")) for k, n in pairs.most_common(limit) if n > 1],
     }
 
