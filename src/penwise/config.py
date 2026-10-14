@@ -116,6 +116,11 @@ class Config:
             except subprocess.TimeoutExpired as exc:
                 raise ConfigError("api_key_command took too long to answer.") from exc
             if out.returncode != 0 or not out.stdout.strip():
+                if self.api_key_command.startswith("security find-generic-password"):  # where Penwise keeps it
+                    raise ConfigError(
+                        "Penwise couldn't read your API key from the Keychain (it was removed, or the Keychain is "
+                        "locked). Paste the key again in the settings."
+                    )
                 detail = out.stderr.strip().splitlines()[-1] if out.stderr.strip() else f"exit code {out.returncode}"
                 raise ConfigError(f"api_key_command did not print a key ({detail}).")
             return out.stdout.strip()

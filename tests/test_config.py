@@ -89,3 +89,9 @@ def test_write_config_keeps_a_key_private(tmp_path):
 )
 def test_parse_value(name, raw, value):
     assert config.parse_value(name, raw) == value
+
+
+def test_a_key_missing_from_the_keychain_is_explained_in_plain_words():
+    cfg = Config(api_key_command="security find-generic-password -s penwise-test-missing -w")
+    with pytest.raises(ConfigError, match="couldn't read your API key from the Keychain"):
+        cfg.resolve_api_key()

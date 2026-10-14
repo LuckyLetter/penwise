@@ -73,7 +73,11 @@ class ChatClient:
         try:
             content = data["choices"][0]["message"]["content"]
         except (KeyError, IndexError, TypeError) as exc:
-            raise LLMError(f"Unexpected answer from {self.base_url}: {json.dumps(data)[:300]}") from exc
+            raise LLMError(
+                f"{self._host()} answered, but not as a chat model does. Check the address in the settings: "
+                "it usually ends in /v1.",
+                in_settings=True,
+            ) from exc
         return content or ""
 
     def _post_without_rejected(self, body: dict) -> dict:
@@ -123,9 +127,13 @@ class ChatClient:
                 in_settings=True,
             ) from exc
 
+    def _host(self) -> str:
+        """The service's name in messages: openrouter.ai, localhost:8080."""
+        return urllib.parse.urlparse(self.base_url).netloc or self.base_url
+
     def _connection_message(self, exc: urllib.error.URLError) -> str:
         """What went wrong, in plain words: where the model is, and what to check."""
-        host = urllib.parse.urlparse(self.base_url).netloc or self.base_url
+        host = self._host()
         if ":11434" in self.base_url:
             return "Could not reach Ollama on this Mac. Is it running? Open the Ollama app."
         if ":1234" in self.base_url:
@@ -151,10 +159,10 @@ class ChatClient:
                 hint = "To download it, choose it in the settings and press Save."
             else:
                 hint = "Check the model's name in the settings."
-            return f"Model or endpoint not found ({self.model} at {self.base_url}). {hint} {detail}".strip()
+            return f"{self._host()} has no model “{self.model}”, or the address isn't right. {hint} {detail}".strip()
         if exc.code == 429:
             return f"Rate limited by the server (429). Wait a moment and try again. {detail}".strip()
-        return f"The server answered with an error ({exc.code}). {detail}".strip()
+        return f"{self._host()} had a problem ({exc.code}). Try again in a moment. {detail}".strip()
 
 
 def ssl_context() -> ssl.SSLContext:

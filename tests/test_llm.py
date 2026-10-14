@@ -124,3 +124,16 @@ def test_a_service_out_of_reach_is_explained_in_plain_words(monkeypatch):
     )
     with pytest.raises(LLMError, match=r"^Could not reach the model server on this Mac \(localhost:8080\)"):
         ChatClient("http://localhost:8080/v1", "m").chat("s", [])
+
+
+def test_a_server_problem_and_a_strange_answer_are_explained_in_plain_words(server, monkeypatch):
+    server.status = 500
+    with pytest.raises(LLMError, match=r"had a problem \(500\)\. Try again in a moment\.") as error:
+        ChatClient(server.url, "m", timeout=5).chat("s", [])
+    assert "127.0.0.1" in str(error.value) and "server answered" not in str(error.value)
+
+    client = ChatClient(server.url, "m")
+    monkeypatch.setattr(client, "_post_without_rejected", lambda body: {"object": "list", "data": []})
+    with pytest.raises(LLMError, match="answered, but not as a chat model does") as error:
+        client.chat("s", [])
+    assert error.value.in_settings and "{" not in str(error.value)  # no JSON dump
