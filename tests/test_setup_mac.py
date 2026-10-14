@@ -142,7 +142,7 @@ def test_hammerspoon_restarts_from_where_it_is(tmp_path, monkeypatch):
     monkeypatch.setattr(setup_mac.subprocess, "run", run)
     monkeypatch.setattr(setup_mac.time, "sleep", lambda seconds: None)
     setup_mac.restart_hammerspoon()
-    assert [c[0] for c in commands] == ["pgrep", "osascript", "pgrep", "pgrep", "open"]
+    assert [c[0] for c in commands] == ["pgrep", "pkill", "pgrep", "pgrep", "open"]
     assert commands[-1] == ["open", str(app)]  # just downloaded: macOS may not know it by name yet
 
 

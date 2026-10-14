@@ -194,7 +194,9 @@ def _hammerspoon_running() -> bool:
 def restart_hammerspoon() -> None:
     """Quit and reopen Hammerspoon so it loads the new config."""
     if _hammerspoon_running():
-        subprocess.run(["osascript", "-e", 'quit app id "org.hammerspoon.Hammerspoon"'], capture_output=True)
+        # A signal, not an Apple Event ("quit app"): that one can make macOS ask whether the
+        # installer, or the Terminal, may control Hammerspoon.
+        subprocess.run(["pkill", "-x", "Hammerspoon"], capture_output=True)
         for _ in range(50):  # opening it while it quits would only bring the old one forward
             if not _hammerspoon_running():
                 break
