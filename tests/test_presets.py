@@ -13,6 +13,12 @@ from penwise import presets, prompts
         ("com.apple.Safari", "general | Slack", "chat"),
         ("com.google.Chrome", "Overleaf, Online LaTeX Editor", "academic"),
         ("com.microsoft.Word", "Slack notes.docx", "academic"),  # titles only count in browsers
+        ("com.alibaba.DingTalkMac", "", "chat"),
+        ("com.electron.lark", "", "chat"),  # Feishu / Lark
+        ("com.tencent.WeWorkMac", "", "chat"),  # WeCom
+        ("com.google.Chrome", "QQ邮箱 - 收件箱", "email"),
+        ("com.apple.Safari", "网易邮箱6.0版", "email"),
+        ("com.google.Chrome", "飞书 - 消息", "chat"),
         ("", "", "academic"),
     ],
 )

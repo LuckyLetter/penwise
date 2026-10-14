@@ -117,6 +117,9 @@ EMAIL_APPS = {
     "com.readdle.SparkDesktop",
     "com.readdle.smartemail-Mac",
     "com.superhuman.electron",
+    "org.mozilla.thunderbird",
+    "com.mimestream.Mimestream",
+    "io.canarymail.mac",
 }
 CHAT_APPS = {
     "com.tinyspeck.slackmacgap",
@@ -128,6 +131,14 @@ CHAT_APPS = {
     "net.whatsapp.WhatsApp",
     "desktop.WhatsApp",
     "com.tencent.xinWeChat",
+    "com.tencent.WeWorkMac",  # WeCom
+    "com.tencent.qq",
+    "com.electron.lark",  # Feishu / Lark
+    "com.bytedance.lark",
+    "com.alibaba.DingTalkMac",
+    "org.whispersystems.signal-desktop",
+    "jp.naver.line.mac",
+    "com.kakao.KakaoTalkMac",
 }
 BROWSERS = {
     "com.apple.Safari",
@@ -137,8 +148,32 @@ BROWSERS = {
     "company.thebrowser.Browser",
     "com.brave.Browser",
 }
-EMAIL_TITLES = ("gmail", "outlook", "proton mail", "fastmail", "yahoo mail")
-CHAT_TITLES = ("slack", "microsoft teams", "whatsapp", "messenger", "discord", "telegram", "wechat")
+EMAIL_TITLES = (
+    "gmail",
+    "outlook",
+    "proton mail",
+    "fastmail",
+    "yahoo mail",
+    "icloud mail",
+    "qq邮箱",
+    "qq mail",
+    "163邮箱",
+    "网易邮箱",
+)
+CHAT_TITLES = (
+    "slack",
+    "microsoft teams",
+    "whatsapp",
+    "messenger",
+    "discord",
+    "telegram",
+    "wechat",
+    "微信",
+    "飞书",
+    "feishu",
+    "钉钉",
+    "dingtalk",
+)
 STYLES = ("academic", "email", "chat")
 
 
