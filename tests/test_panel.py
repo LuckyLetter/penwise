@@ -570,3 +570,14 @@ def test_settings_offer_the_models_the_service_has_for_your_key(page):
     page.locator("#base_url").fill("https://openrouter.ai/api/v1")  # Penwise has its own suggestions there
     page.wait_for_timeout(800)
     assert len([m for m in sent(page) if m.get("action") == "list-models"]) == 1
+
+
+def test_a_slow_check_says_where_a_faster_model_is(page):
+    send(page, {"type": "begin", "original": "Wait untill noon.", "mode": "fix"})
+    page.wait_for_timeout(400)
+    assert page.locator("#slow").count() == 0  # not at once
+    page.evaluate("state.startedAt = Date.now() - 11000")  # eleven seconds later
+    page.wait_for_timeout(400)
+    assert "Taking a while? A faster model helps" in page.locator("#slow").inner_text()
+    page.get_by_role("button", name="Open settings").click()
+    assert sent(page)[-1] == {"action": "settings"}

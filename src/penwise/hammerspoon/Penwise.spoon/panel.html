@@ -232,6 +232,8 @@ const state = {
 // While checking, a ticking timer shows that something is happening. When the
 // text needs no changes, the panel closes by itself unless you interact with it.
 const AUTO_CLOSE_MS = 1500;
+// After this long, a check says where a faster model can be chosen.
+const SLOW_MS = 10000;
 let ticker = null;
 let autoClose = null;
 
@@ -822,6 +824,11 @@ window.penwise = {
         ticker = setInterval(() => {
           const progress = document.getElementById("progress");
           if (progress) progress.textContent = progressText();
+          if (progress && Date.now() - state.startedAt > SLOW_MS && !document.getElementById("slow")) {
+            progress.after(el("div", { class: "status muted", id: "slow" }, "Taking a while? A faster model helps: ",
+              el("button", { type: "button", class: "link", onclick: () => post({ action: "settings" }) }, "Open settings")));
+            reportSize();
+          }
         }, 250);
         break;
       case "start":
