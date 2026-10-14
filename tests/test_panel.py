@@ -549,3 +549,24 @@ def test_a_change_after_saving_is_saved_too_not_dropped_by_done(page):
     page.locator("#hotkey").select_option("E")  # the shortcut too
     page.locator("#primary").click()
     assert sent(page)[-1]["hotkey"] == "e"
+
+
+def test_settings_offer_the_models_the_service_has_for_your_key(page):
+    send(page, {**SETTINGS, "key_prefixes": KEY_PREFIXES})
+    page.get_by_role("button", name="API").click()
+    page.locator("#key").fill("gsk_abc")  # Groq: the address fills in, then Penwise asks Groq for its models
+    page.wait_for_timeout(800)
+    asked = [m for m in sent(page) if m.get("action") == "list-models"]
+    assert asked == [
+        {"action": "list-models", "settings": {"base_url": "https://api.groq.com/openai/v1", "key": "gsk_abc"}}
+    ]
+    send(
+        page, {"type": "models", "base_url": "https://api.groq.com/openai/v1", "models": ["llama-test-8b", "qwen-test"]}
+    )
+    assert page.locator("#suggested-models option").count() == 2
+    assert page.locator("#model-id").get_attribute("placeholder") == "2 models from this service: click to choose"
+    assert page.locator("#key").input_value() == "gsk_abc"  # nothing rebuilt under your fingers
+
+    page.locator("#base_url").fill("https://openrouter.ai/api/v1")  # Penwise has its own suggestions there
+    page.wait_for_timeout(800)
+    assert len([m for m in sent(page) if m.get("action") == "list-models"]) == 1

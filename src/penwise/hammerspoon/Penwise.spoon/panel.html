@@ -439,7 +439,40 @@ function keyHint() {
 
 function suggestedModels() {
   const service = knownService();
-  return (service ? service.models : []).map((m) => el("option", { value: m.id }, m.blurb));
+  if (service && service.models.length) return service.models.map((m) => el("option", { value: m.id }, m.blurb));
+  // Otherwise the models the service itself listed for this address.
+  const fetched = state.fetched && state.fetched.base_url === address() ? state.fetched.models : [];
+  return fetched.map((id) => el("option", { value: id }));
+}
+
+function address() {
+  return (state.form.base_url || "").trim().replace(/\/+$/, "");
+}
+
+// Ask the service which models it has for this key, a moment after the address or the key
+// changes; for services Penwise has no suggestions of its own for.
+let modelsTimer = null;
+let modelsAsked = "";
+
+function askForModels() {
+  clearTimeout(modelsTimer);
+  modelsTimer = setTimeout(() => {
+    const service = knownService();
+    const key = (state.form.key || "").trim();
+    const savedKey = state.settings.has_key && (state.settings.base_url || "").replace(/\/+$/, "") === address();
+    if (state.form.where === LOCAL || !address() || (service && service.models.length) || !(key || savedKey)) return;
+    if (`${address()} ${key}` === modelsAsked) return;
+    modelsAsked = `${address()} ${key}`;
+    post({ action: "list-models", settings: { base_url: address(), key } });
+  }, 600);
+}
+
+function modelsListed() {
+  const list = document.getElementById("suggested-models");
+  if (list) list.replaceChildren(...suggestedModels());
+  const box = document.getElementById("model-id");
+  const count = list ? list.children.length : 0;
+  if (box && count && !knownService()) box.placeholder = `${count} models from this service: click to choose`;
 }
 
 // A change after saving needs saving again: the button goes back from Done to Save, and the
@@ -456,6 +489,7 @@ function addressChanged(event) {
   state.form.base_url = event.target.value;
   document.getElementById("key-hint").replaceChildren(...keyHint());
   document.getElementById("suggested-models").replaceChildren(...suggestedModels());
+  askForModels();
 }
 
 // A key that shows its service (sk-or-… is OpenRouter's) fills in the address, if it's empty.
@@ -474,6 +508,7 @@ function keyChanged(event) {
     document.getElementById("base_url").value = state.form.base_url;
     addressChanged({ target: { value: state.form.base_url } });
   }
+  askForModels();
 }
 
 // The models to choose from on this Mac: Penwise's suggestions, then others already there.
@@ -503,6 +538,7 @@ function chooseWhere(where) {
   };
   state.saved = null;
   render();
+  askForModels();
 }
 
 function input(attrs, field) {
@@ -568,8 +604,12 @@ function renderSettings() {
     parts.push(select);
   }
   if (!local || !listed || state.form.otherModel) {
-    // Suggestions from a service Penwise knows; any model id works.
-    parts.push(input({ id: "model-id", list: "suggested-models", placeholder: "The model's id, as the service names it" }, "model"));
+    // Suggestions from a service Penwise knows, or from the service's own list; any model id works.
+    const fromService = !local && !knownService() && state.fetched && state.fetched.base_url === address()
+      ? state.fetched.models.length : 0;
+    const placeholder = fromService
+      ? `${fromService} models from this service: click to choose` : "The model's id, as the service names it";
+    parts.push(input({ id: "model-id", list: "suggested-models", placeholder }, "model"));
     if (!local) parts.push(el("datalist", { id: "suggested-models" }, ...suggestedModels()));
   }
   if (state.settings.configured && state.settings.hotkeys) parts.push(...shortcutChoice());
@@ -835,6 +875,9 @@ window.penwise = {
           // The first time, a model already on this Mac if there is one.
           ? { where: LOCAL, base_url: "", model: event.configured ? event.model : firstLocalModel() }
           : { where: "api", base_url: event.base_url, model: event.model };
+        state.fetched = null;
+        modelsAsked = "";
+        askForModels();
         break;
       case "saved":
         state.saving = false;
@@ -851,7 +894,12 @@ window.penwise = {
       case "pasted":
         state.form.key = event.text.trim();
         addressFromKey();
+        askForModels();
         break;
+      case "models": // what the service listed for an address
+        state.fetched = { base_url: event.base_url, models: Array.isArray(event.models) ? event.models : [] };
+        modelsListed();
+        return;
       case "saving": // a step that takes a while, like downloading the model
         state.savingText = event.text;
         break;

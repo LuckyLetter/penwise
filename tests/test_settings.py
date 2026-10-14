@@ -175,3 +175,27 @@ def test_the_window_learns_the_models_on_this_mac_and_the_key_prefixes(isolated,
     data = settings.describe()
     assert data["installed"] == ["gemma3:1b", "qwen3:4b"]  # not models that only embed text
     assert {"prefix": "sk-or-", "base_url": "https://openrouter.ai/api/v1"} in data["key_prefixes"]
+
+
+def test_the_models_a_service_offers_to_your_key(isolated, server):
+    result = settings.list_models({"base_url": server.url + "/", "key": "sk-proj-abc"})
+    assert result == {"base_url": server.url, "models": ["gemini-test-flash", "gpt-test", "gpt-test-mini"]}
+    assert server.headers[-1]["Authorization"] == "Bearer sk-proj-abc"  # only to the service itself
+
+
+def test_the_saved_key_lists_the_models_of_the_saved_address(isolated, server, monkeypatch):
+    monkeypatch.setattr(keychain, "available", lambda: False)
+    settings.save({"provider": "custom", "base_url": server.url, "model": "gpt-test", "key": "sk-saved"})
+    assert settings.list_models({"base_url": server.url})["models"]
+    assert server.headers[-1]["Authorization"] == "Bearer sk-saved"
+
+
+def test_no_list_when_the_service_has_none_or_cant_be_reached(isolated):
+    assert settings.list_models({"base_url": "http://127.0.0.1:9/v1", "key": "k"})["models"] == []
+    assert settings.list_models({"base_url": "not an address"})["models"] == []
+
+
+def test_the_command_lists_models_with_the_key_out_of_sight(isolated, server, monkeypatch, capsys):
+    monkeypatch.setenv("PENWISE_SETTINGS", json.dumps({"base_url": server.url, "key": "sk-proj-abc"}))
+    assert cli.main(["settings", "--models"]) == 0
+    assert "gpt-test-mini" in json.loads(capsys.readouterr().out)["models"]

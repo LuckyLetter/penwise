@@ -37,9 +37,21 @@ class FakeServer:
         self.status = 200
         self.error: dict | None = None
         self.reply = self.default_reply
+        # What GET /models lists: chat models and others.
+        self.models = ["gpt-test-mini", "text-embedding-3-small", "gpt-test", "models/gemini-test-flash"]
         server = self
 
         class Handler(BaseHTTPRequestHandler):
+            def do_GET(self):
+                server.headers.append(dict(self.headers))
+                found = self.path.rstrip("/").endswith("/models")
+                data = json.dumps({"data": [{"id": m, "object": "model"} for m in server.models]}).encode()
+                self.send_response(200 if found else 404)
+                self.send_header("Content-Type", "application/json")
+                self.send_header("Content-Length", str(len(data)))
+                self.end_headers()
+                self.wfile.write(data)
+
             def do_POST(self):
                 body = json.loads(self.rfile.read(int(self.headers["Content-Length"])))
                 server.requests.append(body)

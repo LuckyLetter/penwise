@@ -8,15 +8,20 @@ first gets Ollama ready: it starts the app and downloads the model if needed.
 
 from __future__ import annotations
 
+import json
 import os
+import re
 import time
+import urllib.request
 from collections.abc import Callable
 
 from penwise import config, engine, keychain, ollama, presets
 from penwise.config import Config, ConfigError
-from penwise.llm import ChatClient, LLMError
+from penwise.llm import ChatClient, LLMError, ssl_context
 
 TEST_SENTENCE = "This sentence have a error."
+# Models that aren't for chat, kept out of the suggestions.
+_NOT_CHAT = re.compile(r"embed|tts|whisper|dall-e|moderation|audio|image|realtime|transcribe|rerank", re.IGNORECASE)
 
 
 def describe() -> dict:
@@ -124,6 +129,35 @@ def _get_ollama_ready(model: str, progress: Callable[[str], None]) -> dict | Non
 
 def _size(count: int) -> str:
     return f"{count / 1e9:.1f} GB" if count >= 1e9 else f"{count / 1e6:.0f} MB"
+
+
+def list_models(request: dict) -> dict:
+    """The chat models a service offers to this key (its /models list), for the window to suggest.
+
+    Without a key, the saved one is used when the address is the saved one. Any problem: no list.
+    """
+    base_url = (request.get("base_url") or "").strip().rstrip("/")
+    key = (request.get("key") or "").strip()
+    if not base_url.startswith(("http://", "https://")):
+        return {"base_url": base_url, "models": []}
+    if not key:
+        try:
+            cfg = config.load()
+            if cfg.base_url.rstrip("/") == base_url:
+                key = cfg.resolve_api_key()
+        except ConfigError:
+            pass
+    headers = {"Authorization": f"Bearer {key}"} if key else {}
+    try:
+        with urllib.request.urlopen(
+            urllib.request.Request(base_url + "/models", headers=headers), timeout=10, context=ssl_context()
+        ) as response:
+            data = json.loads(response.read())
+    except (OSError, ValueError):
+        return {"base_url": base_url, "models": []}
+    entries = data.get("data", []) if isinstance(data, dict) else []
+    ids = {str(m.get("id", "")).removeprefix("models/") for m in entries if isinstance(m, dict)}
+    return {"base_url": base_url, "models": sorted(i for i in ids if i and not _NOT_CHAT.search(i))[:100]}
 
 
 def _not_saved(message: str) -> dict:

@@ -9,7 +9,7 @@ local obj = {}
 obj.__index = obj
 
 obj.name = "Penwise"
-obj.version = "0.7.2"
+obj.version = "0.7.3"
 obj.author = "LuckyLetter"
 obj.homepage = "https://github.com/LuckyLetter/penwise"
 obj.license = "Apache-2.0 - https://opensource.org/licenses/Apache-2.0"
@@ -402,6 +402,23 @@ function obj:_uninstall(withHammerspoon)
     if not withHammerspoon then hs.timer.doAfter(1, function() hs.reload() end) end
   end, concat(self.args, args))
   self.uninstallTask:start()
+end
+
+-- The models a service offers to the key in the settings view, to suggest there. The key goes
+-- to `penwise` in an environment variable, as when saving.
+function obj:_listModels(values)
+  local task = hs.task.new(self.bin, function(_, stdout)
+    local ok, data = pcall(hs.json.decode, stdout or "")
+    if ok and type(data) == "table" then
+      data.type = "models"
+      self:_send(hs.json.encode(data))
+    end
+  end, concat(self.args, { "settings", "--models" }))
+  local environment = task:environment()
+  environment.PENWISE_SETTINGS = hs.json.encode(values)
+  task:setEnvironment(environment)
+  self.modelsTask = task
+  task:start()
 end
 
 -- Save the settings from the settings view, then show whether the model works. They go to
@@ -1089,6 +1106,8 @@ function obj:_onMessage(body)
   elseif body.action == "save-settings" then
     self:_setHotkeyLetter(body.hotkey)
     self:_saveSettings(body.settings)
+  elseif body.action == "list-models" then
+    self:_listModels(body.settings)
   elseif body.action == "paste-key" then
     self:_send(hs.json.encode({ type = "pasted", text = hs.pasteboard.getContents() or "" }))
   elseif body.action == "uninstall" then

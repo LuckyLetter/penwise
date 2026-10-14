@@ -115,6 +115,7 @@ def build_parser() -> argparse.ArgumentParser:
 
     p = sub.add_parser("settings", help="the settings as JSON, or save them (used by the Mac settings window)")
     p.add_argument("--save", action="store_true", help="save settings given as JSON in $PENWISE_SETTINGS or on stdin")
+    p.add_argument("--models", action="store_true", help="the models a service offers (address and key as for --save)")
     p.set_defaults(run=cmd_settings)
 
     p = sub.add_parser("try", help="open a practice note to try the hotkey on (macOS)")
@@ -319,7 +320,7 @@ def cmd_init(args: argparse.Namespace) -> int:
 
 
 def cmd_settings(args: argparse.Namespace) -> int:
-    if not args.save:
+    if not (args.save or args.models):
         print(json.dumps(settings.describe()))
         return 0
     # From the Mac app the settings come in an environment variable: unlike arguments,
@@ -329,6 +330,9 @@ def cmd_settings(args: argparse.Namespace) -> int:
         request = json.loads(raw)
     except json.JSONDecodeError as exc:
         raise ConfigError(f"settings --save expects JSON: {exc}") from exc
+    if args.models:
+        print(json.dumps(settings.list_models(request)))
+        return 0
     # A line for each step that takes a while (starting Ollama, downloading a model), then the result.
     result = settings.save(request, lambda text: print(json.dumps({"type": "progress", "text": text}), flush=True))
     print(json.dumps(result))

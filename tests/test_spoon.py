@@ -1110,3 +1110,16 @@ def test_after_an_update_penwise_says_so_and_a_failed_one_too(config):
     again = Spoon("stream")  # an ordinary start: nothing to say
     again.run("spoon:start()")
     assert not any("up to date" in line for line in again.log)
+
+
+def test_the_settings_ask_the_service_for_its_models_with_the_key_out_of_sight(config, server):
+    spoon = Spoon("stream")
+    spoon.run("spoon:showSettings()")
+    spoon.message({"action": "ready"})
+    spoon.run_tasks()
+    spoon.message({"action": "list-models", "settings": {"base_url": server.url, "key": "secret-key"}})
+    spoon.run_tasks()
+    listed = spoon.events[-1]
+    assert listed["type"] == "models" and "gpt-test-mini" in listed["models"]
+    assert "ran -m penwise settings --models" in spoon.log
+    assert not any("secret-key" in line for line in spoon.log)

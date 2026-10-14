@@ -74,8 +74,8 @@ Three design rules keep it trustworthy:
 
 2. **Choose a model** in the Penwise window that opens: *On this Mac* (free and private, in
    [Ollama](https://ollama.com); Save starts it and downloads the model, unless you have one already) or *API*
-   (paste your key: for OpenRouter, OpenAI, Anthropic, Groq, Gemini and xAI keys Penwise fills in the address; the
-   key goes in the macOS Keychain). Save tests it right away.
+   (paste your key: for OpenRouter, OpenAI, Anthropic, Groq, Gemini and xAI keys Penwise fills in the address, and
+   the Model box lists the service's models; the key goes in the macOS Keychain). Save tests it right away.
    When macOS asks, turn on Hammerspoon under **Accessibility**: that lets Penwise read and replace your text.
 
 3. **Use it.** Click in any text box and press **⌃⌥P** (Control+Option+P). Look over the changes, then press
