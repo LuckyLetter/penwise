@@ -31,9 +31,12 @@ def main(argv: list[str] | None = None) -> int:
     try:
         return args.run(args)
     except (ConfigError, LLMError) as exc:
+        link = getattr(exc, "link", None)
         if getattr(args, "format", None) == "jsonl":
-            print(json.dumps({"type": "error", "message": str(exc)}), flush=True)
+            print(json.dumps({"type": "error", "message": str(exc), **({"link": link} if link else {})}), flush=True)
         print(f"penwise: {exc}", file=sys.stderr)
+        if link:
+            print(f"{link['label']}: {link['url']}", file=sys.stderr)
         if getattr(exc, "in_settings", False):  # the panel has a link to them; here, the command
             print("To change the settings, run `penwise setup`.", file=sys.stderr)
         return 1

@@ -641,8 +641,11 @@ function render() {
     main.append(...renderSettings());
   } else if (state.status === "error") {
     main.append(el("div", { class: "error" }, state.error));
-    main.append(
-      el("div", { class: "status" },
+    const link = state.errorLink; // a page where the fix is, like adding credits
+    main.append(link
+      ? el("div", { class: "status" },
+        el("button", { type: "button", class: "link", onclick: () => post({ action: "open-url", url: link.url }) }, link.label))
+      : el("div", { class: "status" },
         el("button", { type: "button", class: "link", onclick: () => post({ action: "settings" }) }, "Open settings"),
         el("span", { class: "muted" }, "  to check the model and API key"),
       ),
@@ -782,7 +785,7 @@ window.penwise = {
         break;
       case "error":
         stopTimers();
-        Object.assign(state, { status: "error", error: event.message });
+        Object.assign(state, { status: "error", error: event.message, errorLink: event.link || null });
         break;
       case "settings":
         stopTimers();

@@ -1,6 +1,8 @@
+import dataclasses
+
 import pytest
 
-from penwise import llm
+from penwise import llm, presets
 from penwise.llm import ChatClient, LLMError
 
 
@@ -98,3 +100,12 @@ def test_out_of_credits_is_explained(server):
     server.status = 402
     with pytest.raises(LLMError, match="out of credits"):
         ChatClient(server.url, "m").chat("s", [])
+
+
+def test_out_of_credits_links_to_the_page_to_add_them(server, monkeypatch):
+    service = dataclasses.replace(presets.OPENROUTER, base_url=server.url)
+    monkeypatch.setattr(presets, "PROVIDERS", (service,))
+    server.status = 402
+    with pytest.raises(LLMError, match="out of credits") as error:
+        ChatClient(server.url, "m").chat("s", [])
+    assert error.value.link == {"label": "Add credits", "url": "https://openrouter.ai/settings/credits"}

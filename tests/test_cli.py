@@ -1,9 +1,10 @@
+import dataclasses
 import io
 import json
 
 import pytest
 
-from penwise import cli, config, history
+from penwise import cli, config, history, presets
 
 
 def run(args, monkeypatch, capsys, stdin=""):
@@ -216,3 +217,13 @@ def test_try_opens_the_practice_note_on_a_mac(isolated, monkeypatch, capsys):
     monkeypatch.setattr(cli.setup_mac.subprocess, "run", lambda command, **kwargs: None)
     _, out, _ = run(["try"], monkeypatch, capsys)
     assert "Try Penwise.txt" in out and (isolated / "Try Penwise.txt").exists()
+
+
+def test_running_out_of_credits_comes_with_the_page_to_add_them(server, isolated, monkeypatch, capsys):
+    service = dataclasses.replace(presets.OPENROUTER, base_url=server.url)
+    monkeypatch.setattr(presets, "PROVIDERS", (service,))
+    server.status = 402
+    code, out, err = run(["check", "Hi.", "--base-url", server.url, "-f", "jsonl"], monkeypatch, capsys)
+    assert code == 1
+    assert json.loads(out.splitlines()[-1])["link"]["url"] == "https://openrouter.ai/settings/credits"
+    assert err.splitlines()[-1] == "Add credits: https://openrouter.ai/settings/credits"

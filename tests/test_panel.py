@@ -502,3 +502,12 @@ def test_settings_change_the_shortcut_letter(page):
 
     send(page, {**SETTINGS, "hotkeys": HOTKEYS})  # the welcome window keeps to the model
     assert page.locator("#hotkey").count() == 0
+
+
+def test_an_error_with_a_page_for_the_fix_links_to_it(page):
+    send(page, {"type": "begin", "original": "a eror", "mode": "fix"})
+    link = {"label": "Add credits", "url": "https://openrouter.ai/settings/credits"}
+    send(page, {"type": "error", "message": "Your account is out of credits (402).", "link": link})
+    page.get_by_role("button", name="Add credits").click()
+    assert sent(page)[-1] == {"action": "open-url", "url": "https://openrouter.ai/settings/credits"}
+    assert page.get_by_role("button", name="Open settings").count() == 0  # not where the fix is

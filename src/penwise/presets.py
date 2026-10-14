@@ -27,6 +27,7 @@ class Provider:
     base_url: str
     key_url: str = ""
     models: tuple[Model, ...] = ()
+    credits_url: str = ""  # where to add credits when the account runs out
     explain: bool = True
 
     @property
@@ -40,6 +41,7 @@ OPENROUTER = Provider(
     blurb="cloud models with one API key (easiest to start)",
     base_url="https://openrouter.ai/api/v1",
     key_url="https://openrouter.ai/settings/keys",
+    credits_url="https://openrouter.ai/settings/credits",
     models=(
         Model("mistralai/mistral-small-2603", "fast, low cost, good with language (recommended)"),
         Model("openai/gpt-6-luna", "stronger, low cost; thinking turned off for speed", "none"),

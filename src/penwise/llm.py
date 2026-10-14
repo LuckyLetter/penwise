@@ -13,17 +13,19 @@ import time
 import urllib.error
 import urllib.request
 
-from penwise import __version__
+from penwise import __version__, presets
 from penwise.config import Config
 
 
 class LLMError(Exception):
-    """`in_settings`: the fix is in Penwise's settings (the key, the model, the address)."""
+    """`in_settings`: the fix is in Penwise's settings (the key, the model, the address).
+    `link`: a page where the fix is instead, as {"label": ..., "url": ...}."""
 
-    def __init__(self, message: str, status: int | None = None, in_settings: bool = False):
+    def __init__(self, message: str, status: int | None = None, in_settings: bool = False, link: dict | None = None):
         super().__init__(message)
         self.status = status
         self.in_settings = in_settings
+        self.link = link
 
 
 # Settings some models refuse (e.g. reasoning models that only take their default
@@ -98,8 +100,13 @@ class ChatClient:
             with urllib.request.urlopen(request, timeout=self.timeout, context=ssl_context()) as response:
                 return json.loads(response.read().decode("utf-8"))
         except urllib.error.HTTPError as exc:
+            service = presets.provider_for(self.base_url)
+            credits = service.credits_url if service and exc.code == 402 else ""
             raise LLMError(
-                self._http_error_message(exc), status=exc.code, in_settings=exc.code in (401, 403, 404)
+                self._http_error_message(exc),
+                status=exc.code,
+                in_settings=exc.code in (401, 403, 404),
+                link={"label": "Add credits", "url": credits} if credits else None,
             ) from exc
         except (TimeoutError, urllib.error.URLError) as exc:
             if isinstance(exc, TimeoutError) or isinstance(exc.reason, (socket.timeout, TimeoutError)):
