@@ -287,8 +287,9 @@ headless browser. On a macOS runner, CI also runs `tests/test_macos.py`: it stor
 Keychain, and drives the review panel and quick fix inside the real Hammerspoon app.
 
 **The installer:** `python installer/build.py` writes `dist/Install-Penwise.zip`: an app that runs
-`installer/install.sh` with this version of Penwise inside. To publish a version, attach that zip to a GitHub
-release; the download link above always points to the latest release.
+`installer/install.sh` with this version of Penwise inside. To publish a version, run the *Release* workflow
+(Actions → Release → Run workflow, or push a tag like `v0.7.0`): it builds the zip and attaches it to a release named
+after the version, and the download link above always points to the latest release.
 
 ## License
 
