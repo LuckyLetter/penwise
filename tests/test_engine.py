@@ -199,3 +199,16 @@ def test_punctuation_is_added_even_where_a_held_back_change_ends(text, edited, p
     assert [c.id for c in result.changes] == list(range(len(result.changes)))  # numbered in order
     held = [c for c in result.changes if c.risk]
     assert len(held) == 1 and not held[0].after.endswith(".")
+
+
+@pytest.mark.parametrize(
+    "text, edited",
+    [
+        ("as shown in [1,2] the result are good", "As shown in [1, 2], the results are good."),
+        ("we have 1,000 sample", "We have 1,000 samples."),
+        ("it improve by 2.5 point", "It improves by 2.5 points."),
+    ],
+)
+def test_spacing_and_grammar_around_numbers_are_applied(text, edited):
+    result = engine.check(text, fake_chat({text: edited}))
+    assert result.edited == edited and not any(c.risk for c in result.changes)

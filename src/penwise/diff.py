@@ -12,8 +12,9 @@ from dataclasses import asdict, dataclass
 
 # Words (keeping apostrophes inside them: don't, model's), whitespace runs,
 # and single punctuation characters. Joining the tokens gives back the text.
-# Words, with their apostrophes; numbers whole (0.85, 1,000, 3.2.1); spaces; each other mark.
-_TOKEN = re.compile(r"\d+(?:[.,]\d+)+|\w+(?:['’]\w+)*|\s+|[^\w\s]")
+# Words, with their apostrophes; numbers whole (1,000.5, 0.85, 3.2.1, but not the list [1,2]);
+# spaces; each other mark.
+_TOKEN = re.compile(r"\d{1,3}(?:,\d{3})+(?:\.\d+)?|\d+(?:\.\d+)+|\w+(?:['’]\w+)*|\s+|[^\w\s]")
 WORD = re.compile(r"\w+(?:['’]\w+)*")
 _NOTE = re.compile(r"\[\[.*?\]\]", re.DOTALL)
 
