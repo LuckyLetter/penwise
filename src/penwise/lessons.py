@@ -211,6 +211,9 @@ ALTHOUGH_BUT_NOTE = (
     "“Although” and “but” don't go together: use one (Although it is fast, it is large / It is fast, but it is large)."
 )
 CAN_ABLE_NOTE = "“can” and “be able to” mean the same: use one (it can learn, or it is able to learn)."
+PERFECT_NOTE = "After have/has/had, use the past participle: we have gone, it has finished (not have went)."
+PASSIVE_NOTE = "In the passive, “is/are/was/were” takes the past participle: it is used, they were compared."
+GERUND_NOTE = "After a preposition (for, by, before, without…), a verb takes -ing: for improving, by using."
 AGREEMENT = [{"is", "are"}, {"was", "were"}, {"has", "have"}, {"does", "do"}, {"doesn't", "don't"}, {"isn't", "aren't"}]
 DEMONSTRATIVES = [{"this", "these"}, {"that", "those"}]
 BASE_FORM_AFTER = {
@@ -235,6 +238,23 @@ BASE_FORM_AFTER = {
     "to",
 }
 COMPARATIVES = {"better", "best", "worse", "worst", "less", "least", "more", "most"}
+HAVE = {"have", "has", "had", "having"}
+BE = {"is", "are", "was", "were", "be", "been", "being", "am"}
+PARTICIPLES = {
+    "been",
+    "done",
+    "gone",
+    "made",
+    "taken",
+    "given",
+    "written",
+    "shown",
+    "found",
+    "seen",
+    "chosen",
+    "led",
+    "had",
+}
 
 # Short titles for the points with a note of their own, in the panel and in "Your recurring fixes".
 RULE_TITLES = {
@@ -247,6 +267,9 @@ RULE_TITLES = {
     ALTHOUGH_BUT_NOTE: "Although … but",
     CAN_ABLE_NOTE: "can / be able to",
     POSSESSIVE: "Possessives",
+    PERFECT_NOTE: "Past participle after have",
+    PASSIVE_NOTE: "Passive",
+    GERUND_NOTE: "-ing after a preposition",
     A_AN_NOTE: "a or an",
 }
 
@@ -333,6 +356,15 @@ def _grammar_point(bw: list[str], aw: list[str], previous: list[str], following:
         to_base_form = _same_word(x, y) and len(y) <= len(x) and not y.endswith("ing")
         if previous and previous[0] in BASE_FORM_AFTER and to_base_form:
             return "word-form", BASE_FORM_NOTE
+        before_it = previous[0] if previous else ""
+        participle = x != y and _same_word(x, y) and (y in PARTICIPLES or y.endswith("ed"))
+        if participle and (before_it in HAVE or before_it.endswith("'ve")):  # have went → gone
+            return "word-form", PERFECT_NOTE
+        if participle and before_it in BE:  # is use → used
+            return "word-form", PASSIVE_NOTE
+        # for improve → improving; "to" usually wants the base form instead.
+        if before_it in PREPOSITIONS - {"to"} and _same_word(x, y) and y.endswith("ing") and not x.endswith("ing"):
+            return "word-form", GERUND_NOTE
     # "is depend" → "depends"; "is used" → "uses" is another matter.
     be_verb = len(bw) == 2 and bw[0] in ("is", "are", "am") and not bw[1].endswith(("ed", "en"))
     if be_verb and len(aw) == 1 and _same_word(bw[1], aw[0]):
