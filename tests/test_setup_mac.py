@@ -99,3 +99,14 @@ def test_hotkey_log_shows_the_last_lines(tmp_path, monkeypatch):
     assert setup_mac.hotkey_log() == []
     log.write_text("".join(f"step {n}\n" for n in range(30)))
     assert setup_mac.hotkey_log(3) == ["step 27", "step 28", "step 29"]
+
+
+def test_the_installer_sets_up_the_hotkey_without_questions(tmp_path, monkeypatch):
+    restarted = []
+    monkeypatch.setattr(setup_mac, "hammerspoon_dir", lambda: tmp_path)
+    monkeypatch.setattr(setup_mac, "restart_hammerspoon", lambda: restarted.append(True))
+    setup_mac.install_quietly()
+    init = (tmp_path / "init.lua").read_text()
+    assert "spoon.Penwise.background = true" in init and init.index("background") < init.index(":start()")
+    assert (tmp_path / "Spoons" / "Penwise.spoon" / "init.lua").exists()
+    assert restarted == [True]

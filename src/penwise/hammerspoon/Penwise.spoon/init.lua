@@ -9,7 +9,7 @@ local obj = {}
 obj.__index = obj
 
 obj.name = "Penwise"
-obj.version = "0.5.0"
+obj.version = "0.5.1"
 obj.author = "LuckyLetter"
 obj.homepage = "https://github.com/LuckyLetter/penwise"
 obj.license = "Apache-2.0 - https://opensource.org/licenses/Apache-2.0"
@@ -40,6 +40,12 @@ obj.showMenu = true
 --- Variable
 --- Look for a new version once a day; when there is one, the menu offers to update.
 obj.checkForUpdates = true
+
+--- Penwise.background
+--- Variable
+--- Keep Hammerspoon out of sight: no menu bar or Dock icon of its own, only Penwise's ✎. Set by
+--- the Penwise installer, for people who have Hammerspoon only for Penwise.
+obj.background = false
 
 --- Penwise.logFile
 --- Variable
@@ -170,6 +176,14 @@ end
 --- Method
 --- Adds the Penwise icon to the menu bar, so every action is a click away.
 function obj:start()
+  -- Penwise should work after a restart, and it can't read or paste text without Accessibility:
+  -- start Hammerspoon at login, and let macOS ask for the permission now rather than at the hotkey.
+  hs.autoLaunch(true)
+  hs.accessibilityState(true)
+  if self.background then
+    hs.menuIcon(false)
+    hs.dockIcon(false)
+  end
   if self.showMenu and not self.menu then
     self.menu = hs.menubar.new()
     self.menu:setTitle("✎")

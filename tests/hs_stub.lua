@@ -217,6 +217,9 @@ hs = {
   },
   focus = function() log("activate Hammerspoon") end,
   accessibilityState = function() return ACCESSIBILITY ~= false end,
+  autoLaunch = function(on) log("hammerspoon starts at login: " .. tostring(on)) end,
+  menuIcon = function(on) log("hammerspoon menu icon: " .. tostring(on)) end,
+  dockIcon = function(on) log("hammerspoon dock icon: " .. tostring(on)) end,
   drawing = { windowLevels = { floating = 3 }, windowBehaviors = { canJoinAllSpaces = 1, fullScreenAuxiliary = 256 } },
   webview = {
     windowMasks = { borderless = 0, nonactivating = 128 },

@@ -26,9 +26,10 @@ spoon.Penwise:bindHotkeys({{
   improve = {{ {{ "ctrl", "alt", "shift" }}, "p" }}, -- also improve clarity and flow
   quick = {{ {{ "ctrl", "alt", "cmd" }}, "p" }},     -- fix and replace right away, no review
 }})
-spoon.Penwise:start() -- the ✎ menu bar icon
+{background}spoon.Penwise:start() -- the ✎ menu bar icon
 {end}
 """
+BACKGROUND = "spoon.Penwise.background = true -- Hammerspoon out of sight: only the ✎ icon\n"
 
 # The block written by Penwise 0.1, before it had markers.
 _OLD_SNIPPET = re.compile(r"\n?-- Penwise: select text anywhere.*?\n\}\)\n", re.DOTALL)
@@ -62,9 +63,10 @@ def _lua_args(args: list[str]) -> str:
     return "{ " + ", ".join(f'"{a}"' for a in args) + " }" if args else "{}"
 
 
-def snippet() -> str:
+def snippet(background: bool = False) -> str:
     bin_path, args = penwise_command()
-    return SNIPPET.format(begin=BEGIN, end=END, bin=bin_path, args=_lua_args(args))
+    extra = BACKGROUND if background else ""
+    return SNIPPET.format(begin=BEGIN, end=END, bin=bin_path, args=_lua_args(args), background=extra)
 
 
 def install_spoon(target_dir: Path | None = None) -> Path:
@@ -75,11 +77,11 @@ def install_spoon(target_dir: Path | None = None) -> Path:
     return target
 
 
-def write_snippet(init_file: Path) -> str:
+def write_snippet(init_file: Path, background: bool = False) -> str:
     """Add or refresh the Penwise block in init.lua. Returns "added", "updated" or "unchanged".
 
     Inside an existing block only the path to `penwise` is refreshed, so hotkeys
-    you changed there are kept.
+    you changed there are kept. `background` keeps Hammerspoon out of sight (new blocks).
     """
     text = init_file.read_text(encoding="utf-8") if init_file.exists() else ""
     if BEGIN in text:
@@ -93,12 +95,19 @@ def write_snippet(init_file: Path) -> str:
         new = _OLD_SNIPPET.sub(lambda _: "\n" + snippet(), text, count=1)
         status = "updated"
     else:
-        new = text + ("\n" if text and not text.endswith("\n") else "") + ("\n" if text else "") + snippet()
+        new = text + ("\n" if text and not text.endswith("\n") else "") + ("\n" if text else "") + snippet(background)
         status = "added"
     if new != text:
         init_file.parent.mkdir(parents=True, exist_ok=True)
         init_file.write_text(new, encoding="utf-8")
     return status
+
+
+def install_quietly() -> None:
+    """Install the hotkey without asking anything, Hammerspoon out of sight (for the installer)."""
+    install_spoon()
+    write_snippet(hammerspoon_dir() / "init.lua", background=True)
+    restart_hammerspoon()
 
 
 def refresh() -> bool:

@@ -118,6 +118,9 @@ def build_parser() -> argparse.ArgumentParser:
 
     p = sub.add_parser("setup-mac", help="install or update only the hotkey (part of `penwise setup`)")
     p.add_argument("--refresh", action="store_true", help="only update an installed hotkey; ask nothing")
+    p.add_argument(
+        "--background", action="store_true", help="install without questions, Hammerspoon out of sight (installer)"
+    )
     p.set_defaults(run=cmd_setup_mac)
 
     p = sub.add_parser("record", help="save accepted changes; used by the Mac panel")
@@ -389,6 +392,10 @@ def cmd_setup_mac(args: argparse.Namespace) -> int:
     if args.refresh:
         if setup_mac.refresh():
             print("✓ Hotkey updated, and Hammerspoon restarted to load it.")
+        return 0
+    if args.background:
+        setup_mac.install_quietly()
+        print("✓ Hotkey installed. Penwise opens its settings to choose a model.")
         return 0
     return 0 if wizard.setup_hotkey() else 1
 

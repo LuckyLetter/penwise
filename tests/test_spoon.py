@@ -913,3 +913,14 @@ def test_the_settings_stay_open_while_you_fetch_a_key(config):
     spoon.run('spoon:check("fix")')  # a check, though, closes when you click elsewhere
     spoon.run('WINDOW_CALLBACK("focusChange", nil, false)')
     assert not spoon.lua.globals().PANEL.visible
+
+
+def test_hammerspoon_starts_at_login_and_stays_out_of_sight_when_asked(config):
+    spoon = Spoon("stream")
+    spoon.run("spoon:start()")
+    assert "hammerspoon starts at login: true" in spoon.log
+    assert not any("icon" in line for line in spoon.log)  # people who use Hammerspoon keep its icons
+
+    spoon = Spoon("stream")
+    spoon.run("spoon.background = true; spoon:start()")  # installed by the Penwise installer
+    assert "hammerspoon menu icon: false" in spoon.log and "hammerspoon dock icon: false" in spoon.log
