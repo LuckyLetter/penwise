@@ -27,6 +27,13 @@ def mac(tmp_path, monkeypatch):
         path.write_text("x")
     setup_mac.install_spoon()
     setup_mac.write_snippet(home / ".hammerspoon" / "init.lua", background=True)
+
+    def trash(path):  # the Trash, as macOS's own call moves things there
+        (home / ".Trash").mkdir(exist_ok=True)
+        path.rename(home / ".Trash" / path.name)
+        return True
+
+    monkeypatch.setattr(uninstall, "trash", trash)
     keys = ["sk-or-v1-abc"]
     monkeypatch.setattr(keychain, "available", lambda: True)
     monkeypatch.setattr(keychain, "read", lambda: keys[0] if keys else "")
@@ -98,3 +105,23 @@ def test_the_command_asks_first_then_says_what_it_removed(mac, monkeypatch, caps
     assert cli.main(["uninstall", "--yes", "--hammerspoon", "--json"]) == 0
     assert "the hotkey" in json.loads(capsys.readouterr().out)["removed"]
     assert quit_hammerspoon == [True]  # last
+
+
+def test_hammerspoon_goes_to_the_trash_the_way_apps_do_it(tmp_path, monkeypatch):
+    commands = []
+    monkeypatch.setattr(uninstall.subprocess, "run", lambda command, **kw: commands.append(command))
+    app = tmp_path / "Hammerspoon.app"
+    app.mkdir()
+    assert uninstall.trash(app) is False  # nothing really moved it here
+    (command,) = commands
+    assert command[:4] == ["osascript", "-l", "JavaScript", "-e"]  # not Finder: no permission to ask for
+    assert "trashItemAtURL" in command[4] and f'"{app}"' in command[4]
+
+
+def test_if_hammerspoon_cant_go_to_the_trash_it_says_so(mac, monkeypatch, capsys):
+    monkeypatch.setattr(uninstall, "trash", lambda path: False)
+    monkeypatch.setattr(uninstall, "quit_hammerspoon", lambda: None)
+    assert cli.main(["uninstall", "--yes", "--hammerspoon"]) == 0
+    out = capsys.readouterr().out
+    assert "Hammerspoon is still in Applications" in out
+    assert (mac / "Applications" / "Hammerspoon.app").exists()

@@ -12,7 +12,7 @@ import time
 
 import pytest
 
-from penwise import config, keychain, setup_mac
+from penwise import config, keychain, setup_mac, uninstall
 from penwise.config import Config
 
 pytestmark = pytest.mark.skipif(
@@ -35,6 +35,21 @@ def test_keychain_round_trip(monkeypatch):
         assert Config(api_key_command=command).resolve_api_key() == "sk-or-v1-second"
     finally:
         subprocess.run(["security", "delete-generic-password", "-s", service], capture_output=True)
+
+
+def test_hammerspoon_downloads_unpacks_and_checks_out(tmp_path, monkeypatch):
+    folder = tmp_path / "Applications"  # not the real one
+    folder.mkdir()
+    monkeypatch.setattr(setup_mac, "APP_PATHS", (folder / "Hammerspoon.app", tmp_path / "home" / "Hammerspoon.app"))
+    app = setup_mac.install_hammerspoon()
+    assert app == folder / "Hammerspoon.app"
+    assert (app / "Contents" / "MacOS" / "Hammerspoon").exists()
+
+
+def test_the_trash_takes_things_through_macos_own_call(tmp_path):
+    item = tmp_path / f"penwise-trash-test-{os.getpid()}.txt"
+    item.write_text("x")
+    assert uninstall.trash(item), "NSFileManager didn't move it to the Trash"
 
 
 def hs(lua: str, timeout: float = 10) -> str:

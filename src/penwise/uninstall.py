@@ -7,6 +7,7 @@ Trash only when asked to: the installer may have put it there just for Penwise.
 from __future__ import annotations
 
 import contextlib
+import json
 import re
 import shutil
 import subprocess
@@ -19,7 +20,7 @@ _BLOCK = re.compile(rf"\n*{re.escape(setup_mac.BEGIN)}.*?{re.escape(setup_mac.EN
 
 
 def run(remove_hammerspoon: bool = False) -> list[str]:
-    """Uninstall Penwise; returns what was removed, in plain words."""
+    """Uninstall Penwise; returns what was removed, in plain words (Hammerspoon only if it was)."""
     removed = []
     if _remove_hotkey():
         removed.append("the hotkey")
@@ -73,16 +74,22 @@ def _remove_files(paths: list[Path]) -> bool:
     return found
 
 
+def trash(path: Path) -> bool:
+    """Move to the Trash as apps do (NSFileManager): macOS keeps other programs out of ~/.Trash,
+    and asking the Finder would need a permission. Through osascript's JavaScript, no Apple Events."""
+    url = f"$.NSURL.fileURLWithPath({json.dumps(str(path))})"
+    script = (
+        'ObjC.import("Foundation"); '
+        f"$.NSFileManager.defaultManager.trashItemAtURLResultingItemURLError({url}, null, null)"
+    )
+    subprocess.run(["osascript", "-l", "JavaScript", "-e", script], capture_output=True)
+    return not path.exists()
+
+
 def _trash_hammerspoon() -> bool:
     app = next((path for path in setup_mac.APP_PATHS if path.exists()), None)
-    if not app:
+    if not app or not trash(app):
         return False
-    trash = Path.home() / ".Trash"
-    trash.mkdir(exist_ok=True)
-    target = trash / app.name
-    if target.exists():
-        target = trash / f"Hammerspoon {len(list(trash.glob('Hammerspoon*.app')))}.app"
-    shutil.move(str(app), str(target))
     # Its settings folder, if Penwise's hotkey was all there was in it: empty files and folders only.
     folder = setup_mac.hammerspoon_dir()
     init_file = folder / "init.lua"

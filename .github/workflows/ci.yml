@@ -57,3 +57,38 @@ jobs:
         env:
           PENWISE_MACOS_INTEGRATION: "1"
         run: pytest -v tests/test_macos.py
+
+  installer:
+    name: Install Penwise on a real Mac, then uninstall it
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - name: Build Install Penwise and unzip it, as the Mac does
+        run: |
+          python installer/build.py
+          ditto -x -k dist/Install-Penwise.zip "$RUNNER_TEMP"
+          test -x "$RUNNER_TEMP/Install Penwise.app/Contents/MacOS/Install Penwise"
+      - name: Install from it (its script, without the dialogs, which would wait for a click)
+        run: |
+          app="$RUNNER_TEMP/Install Penwise.app"
+          cp "$app/Contents/MacOS/Install Penwise" "$RUNNER_TEMP/install.sh"
+          bash "$RUNNER_TEMP/install.sh" "$(ls "$app"/Contents/Resources/penwise-*.whl)"
+      - name: Check what it installed
+        run: |
+          ~/.local/bin/penwise --version
+          app=$(ls -d /Applications/Hammerspoon.app ~/Applications/Hammerspoon.app 2>/dev/null | head -1)
+          codesign --verify "$app"
+          grep -q "spoon.Penwise.background = true" ~/.hammerspoon/init.lua
+          test -d ~/.hammerspoon/Spoons/Penwise.spoon
+          pgrep -x Hammerspoon
+      - name: Uninstall, Hammerspoon included
+        run: |
+          ~/.local/bin/penwise uninstall --yes --hammerspoon
+          sleep 3
+          test ! -e ~/.local/bin/penwise
+          test ! -e ~/.hammerspoon/Spoons/Penwise.spoon
+          test ! -e /Applications/Hammerspoon.app && test ! -e ~/Applications/Hammerspoon.app
+          if pgrep -x Hammerspoon; then echo "Hammerspoon still runs"; exit 1; fi

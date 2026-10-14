@@ -345,6 +345,8 @@ def cmd_uninstall(args: argparse.Namespace) -> int:
         print(json.dumps({"removed": removed}), flush=True)
     else:
         print(f"✓ Removed {', '.join(removed)}." if removed else "Penwise wasn't installed here.")
+        if args.hammerspoon and not any(item.startswith("Hammerspoon") for item in removed):
+            print("Hammerspoon is still in Applications: drag it to the Trash if you don't need it.")
     if args.hammerspoon:
         uninstall.quit_hammerspoon()  # last: it may be what started this command
     return 0
