@@ -9,7 +9,7 @@ local obj = {}
 obj.__index = obj
 
 obj.name = "Penwise"
-obj.version = "0.6.5"
+obj.version = "0.6.6"
 obj.author = "LuckyLetter"
 obj.homepage = "https://github.com/LuckyLetter/penwise"
 obj.license = "Apache-2.0 - https://opensource.org/licenses/Apache-2.0"
@@ -101,6 +101,9 @@ local function concat(first, second)
   return out
 end
 
+-- Where Hammerspoon keeps the hotkeys' letter chosen in the settings.
+local LETTER_SETTING = "penwise.hotkeyLetter"
+
 local function restoreClipboard(saved)
   if saved and next(saved) then
     hs.pasteboard.writeAllData(saved)
@@ -162,7 +165,16 @@ end
 ---  * `fix`: review fixes for the selected text
 ---  * `improve`: also improve clarity and flow
 ---  * `quick`: fix the selected text and replace it right away, without the review panel
+---
+--- The letter chosen in the settings (E for ⌃⌥E, ⌃⌥⇧E and ⌃⌥⌘E) replaces the one in `mapping`.
 function obj:bindHotkeys(mapping)
+  self.hotkeySpec = mapping
+  local letter = hs.settings.get(LETTER_SETTING)
+  if letter then
+    local chosen = {}
+    for name, spec in pairs(mapping) do chosen[name] = { spec[1], letter } end
+    mapping = chosen
+  end
   hs.spoons.bindHotkeysToSpec({
     fix = function() self:check("fix") end,
     improve = function() self:check("improve") end,
@@ -170,6 +182,13 @@ function obj:bindHotkeys(mapping)
   }, mapping)
   self.hotkeys = mapping
   return self
+end
+
+-- Use another letter for the hotkeys, from now on: Hammerspoon keeps it across restarts.
+function obj:_setHotkeyLetter(letter)
+  if type(letter) ~= "string" or not letter:match("^[a-z0-9]$") or not self.hotkeySpec then return end
+  hs.settings.set(LETTER_SETTING, letter)
+  self:bindHotkeys(self.hotkeySpec) -- replaces the hotkeys bound before
 end
 
 --- Penwise:start()
@@ -317,7 +336,9 @@ function obj:_showView(title, view, command, waiting)
       data.type = view
       if view == "settings" then
         data.access = hs.accessibilityState()
-        data.hotkey = hotkeyLabel((self.hotkeys or {}).fix) -- what to press once it works
+        local keys = self.hotkeys or {}
+        data.hotkey = hotkeyLabel(keys.fix) -- what to press once it works
+        data.hotkeys = { fix = hotkeyLabel(keys.fix), improve = hotkeyLabel(keys.improve), quick = hotkeyLabel(keys.quick) }
       end
       self:_send(hs.json.encode(data))
     else
@@ -992,6 +1013,7 @@ function obj:_onMessage(body)
   elseif body.action == "settings" then
     self:showSettings()
   elseif body.action == "save-settings" then
+    self:_setHotkeyLetter(body.hotkey)
     self:_saveSettings(body.settings)
   elseif body.action == "paste-key" then
     self:_send(hs.json.encode({ type = "pasted", text = hs.pasteboard.getContents() or "" }))

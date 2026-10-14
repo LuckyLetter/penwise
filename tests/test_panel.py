@@ -474,3 +474,18 @@ def test_settings_fill_in_the_address_that_goes_with_a_key(page):
     page.locator("#base_url").fill("")
     send(page, {"type": "pasted", "text": "gsk_abc\n"})  # the Paste button
     assert page.locator("#base_url").input_value() == "https://api.groq.com/openai/v1"
+
+
+HOTKEYS = {"fix": "⌃⌥P", "improve": "⌃⌥⇧P", "quick": "⌃⌥⌘P"}
+
+
+def test_settings_change_the_shortcut_letter(page):
+    send(page, {**SETTINGS, "configured": True, "hotkeys": HOTKEYS})
+    assert page.locator("#hotkey").input_value() == "P"
+    page.locator("#hotkey").select_option("E")  # another app uses ⌃⌥P
+    assert page.locator("#hotkey-hint").inner_text() == "⌃⌥⇧E also improves the text · ⌃⌥⌘E fixes it right away"
+    page.locator("#primary").click()
+    assert sent(page)[-1]["hotkey"] == "e"
+
+    send(page, {**SETTINGS, "hotkeys": HOTKEYS})  # the welcome window keeps to the model
+    assert page.locator("#hotkey").count() == 0

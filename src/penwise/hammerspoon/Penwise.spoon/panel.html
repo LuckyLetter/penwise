@@ -121,6 +121,9 @@
   .form input:focus, .form select:focus { outline: 2px solid var(--accent); outline-offset: -1px; }
   .form .row { display: flex; gap: 8px; }
   .form .row input { flex: 1; }
+  .form .shortcut { align-items: center; }
+  .form .shortcut .modifiers { font-size: 15px; }
+  .form .shortcut select { width: auto; }
   .form .hint { margin-top: 6px; font-size: 12px; color: var(--muted); }
   .form .modes { margin-top: 2px; }
   .form .result { margin-top: 16px; }
@@ -552,6 +555,7 @@ function renderSettings() {
     parts.push(input({ id: "model-id", list: "suggested-models", placeholder: "The model's id, as the service names it" }, "model"));
     if (!local) parts.push(el("datalist", { id: "suggested-models" }, ...suggestedModels()));
   }
+  if (state.settings.configured && state.settings.hotkeys) parts.push(...shortcutChoice());
   if (state.saving) {
     parts.push(el("div", { class: "result muted pulse", id: "saving" }, state.savingText || "Saving and testing…"));
   } else if (state.saved && state.saved.ok) {
@@ -572,6 +576,29 @@ function renderSettings() {
   return [el("div", { class: "form" }, ...parts.filter(Boolean))];
 }
 
+// The hotkeys' letter (⌃⌥P → ⌃⌥E), for when another app uses ⌃⌥P. Not on the welcome window:
+// you'd find that out later.
+const LETTERS = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789".split("");
+
+function shortcutChoice() {
+  const keys = state.settings.hotkeys;
+  const withLetter = (label) => label.slice(0, -1) + (state.form.hotkey || label.slice(-1).toLowerCase()).toUpperCase();
+  const hint = () => [
+    keys.improve && `${withLetter(keys.improve)} also improves the text`,
+    keys.quick && `${withLetter(keys.quick)} fixes it right away`,
+  ].filter(Boolean).join(" · ");
+  const select = el("select", { id: "hotkey", "aria-label": "Shortcut letter", onchange: (event) => {
+    state.form.hotkey = event.target.value.toLowerCase();
+    document.getElementById("hotkey-hint").textContent = hint();
+  } }, ...LETTERS.map((letter) => el("option", { value: letter }, letter)));
+  select.value = withLetter(keys.fix).slice(-1);
+  return [
+    el("label", { for: "hotkey" }, "Shortcut"),
+    el("div", { class: "row shortcut" }, el("span", { class: "modifiers" }, keys.fix.slice(0, -1)), select),
+    el("div", { class: "hint", id: "hotkey-hint" }, hint()),
+  ];
+}
+
 function saveSettings() {
   if (state.saving) return;
   state.saving = true;
@@ -581,6 +608,7 @@ function saveSettings() {
   post({
     action: "save-settings",
     settings: { provider: where === LOCAL ? LOCAL : "custom", base_url: base_url || "", model, key: state.form.key || "" },
+    ...(state.form.hotkey ? { hotkey: state.form.hotkey } : {}),
   });
   render();
 }

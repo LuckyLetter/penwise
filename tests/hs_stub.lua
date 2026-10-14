@@ -124,7 +124,7 @@ hs = {
   logger = { new = function() return {} end },
   spoons = {
     scriptPath = function() return SPOON_DIR end,
-    bindHotkeysToSpec = function(spec) HOTKEYS = spec end,
+    bindHotkeysToSpec = function(spec, mapping) HOTKEYS, HOTKEY_KEYS = spec, mapping end,
   },
   fs = { attributes = function() return {} end },
   alert = {
@@ -251,5 +251,10 @@ hs = {
     end,
   },
   urlevent = { openURL = function(url) log("open " .. url) end },
+  -- Hammerspoon's own store, kept across restarts.
+  settings = {
+    get = function(key) return (SETTINGS_STORE or {})[key] end,
+    set = function(key, value) SETTINGS_STORE = SETTINGS_STORE or {}; SETTINGS_STORE[key] = value end,
+  },
   osascript = { applescript = function(script) log("applescript " .. script); return true end },
 }

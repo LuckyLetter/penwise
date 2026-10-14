@@ -96,8 +96,9 @@ Prefer clicking? The **✎ icon in the menu bar** has the same three actions, pl
 **You rarely need to select anything.** With nothing selected, Penwise reads the text straight from the app: in a
 short text box (a message, a comment, up to 2,000 characters) it takes the whole box; in a longer document, the
 paragraph your cursor is in. Select text to check just that. The panel opens right above your text, sized to fit,
-and closes by itself when your text needs no changes, or when you click elsewhere. To change the hotkeys, edit the
-Penwise block in `~/.hammerspoon/init.lua`; running `penwise setup` again keeps your changes.
+and closes by itself when your text needs no changes, or when you click elsewhere. Another app uses ⌃⌥P? Pick another
+letter under *Shortcut* in Settings. To change the keys around it, edit the Penwise block in
+`~/.hammerspoon/init.lua`; running `penwise setup` again keeps your changes.
 
 ### The right tone, automatically
 

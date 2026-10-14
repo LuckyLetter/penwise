@@ -1005,3 +1005,25 @@ def test_settings_know_your_hotkey_and_open_the_practice_note(config):
     spoon.run_tasks()
     assert not spoon.lua.globals().PANEL.visible
     assert "ran -m penwise try" in spoon.log
+
+
+def test_the_shortcut_letter_chosen_in_the_settings_is_used_and_kept(config):
+    spoon = Spoon("stream")
+    spoon.run('spoon:bindHotkeys({ fix = { { "ctrl", "alt" }, "p" }, improve = { { "ctrl", "alt", "shift" }, "p" } })')
+    spoon.run("spoon:showSettings()")
+    spoon.message({"action": "ready"})
+    spoon.run_tasks()
+    assert spoon.events[-1]["hotkeys"] == {"fix": "⌃⌥P", "improve": "⌃⌥⇧P", "quick": ""}
+    values = {"provider": "custom", "base_url": "http://127.0.0.1:9/v1", "model": "m"}
+    spoon.message({"action": "save-settings", "settings": values, "hotkey": "F1"})  # not a letter: ignored
+    assert spoon.to_python(spoon.lua.globals().HOTKEY_KEYS)["fix"] == [["ctrl", "alt"], "p"]
+    spoon.message({"action": "save-settings", "settings": values, "hotkey": "e"})
+    keys = spoon.to_python(spoon.lua.globals().HOTKEY_KEYS)
+    assert keys == {"fix": [["ctrl", "alt"], "e"], "improve": [["ctrl", "alt", "shift"], "e"]}
+    assert spoon.lua.globals().SETTINGS_STORE["penwise.hotkeyLetter"] == "e"
+
+    again = Spoon("stream")  # Hammerspoon restarted: init.lua still says P
+    again.run('SETTINGS_STORE = { ["penwise.hotkeyLetter"] = "e" }')
+    again.run('spoon:bindHotkeys({ fix = { { "ctrl", "alt" }, "p" } }); spoon:start()')
+    assert spoon.to_python(again.lua.globals().HOTKEY_KEYS) == {"fix": [["ctrl", "alt"], "e"]}
+    assert any(item["title"].endswith("⌃⌥E") for item in menu_items(again))
