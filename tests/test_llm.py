@@ -75,7 +75,7 @@ def test_rejected_key_is_explained(server):
 
 
 def test_unreachable_ollama_says_how_to_start_it():
-    with pytest.raises(LLMError, match="Is Ollama running"):
+    with pytest.raises(LLMError, match=r"Could not reach Ollama on this Mac\. Is it running\? Open the Ollama app\."):
         ChatClient("http://127.0.0.1:11434/v1", "m", timeout=2).chat("s", [])
 
 
@@ -109,3 +109,18 @@ def test_out_of_credits_links_to_the_page_to_add_them(server, monkeypatch):
     with pytest.raises(LLMError, match="out of credits") as error:
         ChatClient(server.url, "m").chat("s", [])
     assert error.value.link == {"label": "Add credits", "url": "https://openrouter.ai/settings/credits"}
+
+
+def test_a_service_out_of_reach_is_explained_in_plain_words(monkeypatch):
+    def offline(*args, **kwargs):
+        raise llm.urllib.error.URLError(OSError(8, "nodename nor servname provided, or not known"))
+
+    monkeypatch.setattr(llm.urllib.request, "urlopen", offline)
+    with pytest.raises(LLMError) as error:
+        ChatClient("https://openrouter.ai/api/v1", "m").chat("s", [])
+    assert (
+        str(error.value)
+        == "Could not reach openrouter.ai. Check your internet connection, and the address in the settings."
+    )
+    with pytest.raises(LLMError, match=r"^Could not reach the model server on this Mac \(localhost:8080\)"):
+        ChatClient("http://localhost:8080/v1", "m").chat("s", [])

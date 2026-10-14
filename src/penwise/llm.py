@@ -11,6 +11,7 @@ import socket
 import ssl
 import time
 import urllib.error
+import urllib.parse
 import urllib.request
 
 from penwise import __version__, presets
@@ -123,14 +124,15 @@ class ChatClient:
             ) from exc
 
     def _connection_message(self, exc: urllib.error.URLError) -> str:
-        msg = f"Could not reach {self.base_url} ({exc.reason})."
+        """What went wrong, in plain words: where the model is, and what to check."""
+        host = urllib.parse.urlparse(self.base_url).netloc or self.base_url
         if ":11434" in self.base_url:
-            msg += " Is Ollama running? Open the Ollama app."
-        elif ":1234" in self.base_url:
-            msg += " Is the LM Studio server started (Developer tab → Start server)?"
-        elif "localhost" in self.base_url or "127.0.0.1" in self.base_url:
-            msg += " Is your local model server running?"
-        return msg
+            return "Could not reach Ollama on this Mac. Is it running? Open the Ollama app."
+        if ":1234" in self.base_url:
+            return "Could not reach LM Studio on this Mac. Is its server started (Developer tab → Start server)?"
+        if presets.is_local(self.base_url):
+            return f"Could not reach the model server on this Mac ({host}). Is it running?"
+        return f"Could not reach {host}. Check your internet connection, and the address in the settings."
 
     def _http_error_message(self, exc: urllib.error.HTTPError) -> str:
         detail = ""

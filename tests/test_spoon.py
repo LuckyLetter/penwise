@@ -318,7 +318,7 @@ def test_an_error_offers_to_check_the_setup(isolated):
     spoon.run_tasks()
     note = spoon.events[-1]
     assert note["type"] == "note" and note["title"] == "Check my setup"
-    assert "✗ Test        Could not reach http://127.0.0.1:9/v1" in note["text"]
+    assert "✗ Test        Could not reach the model server on this Mac (127.0.0.1:9)" in note["text"]
 
 
 def test_check_my_setup_shows_each_part_in_the_panel(config):
