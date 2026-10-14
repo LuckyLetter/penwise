@@ -527,3 +527,25 @@ def test_uninstalling_takes_a_click_not_return(page):
     assert page.locator("#with-hammerspoon").count() == 0
     page.locator("#primary").click()
     assert sent(page)[-1] == {"action": "uninstall", "hammerspoon": False}
+
+
+def test_a_change_after_saving_is_saved_too_not_dropped_by_done(page):
+    send(page, {**SETTINGS, "configured": True, "hotkeys": HOTKEYS})
+    page.get_by_role("button", name="API").click()
+    page.locator("#base_url").fill("https://openrouter.ai/api/v1")
+    page.locator("#model-id").fill("openai/gpt-6-luna")
+    page.keyboard.press("Enter")
+    send(page, {"type": "saved", "saved": True, "ok": True, "before": "a eror", "after": "an error", "seconds": 1.0})
+    assert page.locator("#primary").inner_text().startswith("Done")
+
+    page.locator("#model-id").fill("mistralai/mistral-small-2603")  # changed your mind
+    assert page.locator("#primary").inner_text().startswith("Save")
+    assert "It works" not in page.locator("main").inner_text()
+    assert page.locator("#model-id").evaluate("element => element === document.activeElement")  # still typing
+    page.keyboard.press("Enter")
+    assert sent(page)[-1]["settings"]["model"] == "mistralai/mistral-small-2603"
+
+    send(page, {"type": "saved", "saved": True, "ok": True, "before": "a eror", "after": "an error", "seconds": 1.0})
+    page.locator("#hotkey").select_option("E")  # the shortcut too
+    page.locator("#primary").click()
+    assert sent(page)[-1]["hotkey"] == "e"

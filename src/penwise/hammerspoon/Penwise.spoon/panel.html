@@ -442,7 +442,17 @@ function suggestedModels() {
   return (service ? service.models : []).map((m) => el("option", { value: m.id }, m.blurb));
 }
 
+// A change after saving needs saving again: the button goes back from Done to Save, and the
+// result of the last save goes, without rebuilding the form (you may be typing).
+function formEdited() {
+  if (!state.saved) return;
+  state.saved = null;
+  document.querySelectorAll(".form .result, #next").forEach((node) => node.remove());
+  document.getElementById("primary").firstChild.textContent = primaryLabel();
+}
+
 function addressChanged(event) {
+  formEdited();
   state.form.base_url = event.target.value;
   document.getElementById("key-hint").replaceChildren(...keyHint());
   document.getElementById("suggested-models").replaceChildren(...suggestedModels());
@@ -458,6 +468,7 @@ function addressFromKey() {
 }
 
 function keyChanged(event) {
+  formEdited();
   state.form.key = event.target.value;
   if (addressFromKey()) {
     document.getElementById("base_url").value = state.form.base_url;
@@ -496,7 +507,7 @@ function chooseWhere(where) {
 
 function input(attrs, field) {
   return el("input", {
-    ...attrs, value: state.form[field] || "", oninput: (event) => { state.form[field] = event.target.value; },
+    ...attrs, value: state.form[field] || "", oninput: (event) => { formEdited(); state.form[field] = event.target.value; },
   });
 }
 
@@ -545,6 +556,7 @@ function renderSettings() {
   const listed = models.some((m) => m.id === state.form.model);
   if (local) {
     const select = el("select", { id: "model-choice", onchange: (event) => {
+      state.saved = null;
       state.form.otherModel = event.target.value === OTHER_MODEL;
       state.form.model = state.form.otherModel ? "" : event.target.value;
       render();
@@ -593,6 +605,7 @@ function shortcutChoice() {
     keys.quick && `${withLetter(keys.quick)} fixes it right away`,
   ].filter(Boolean).join(" · ");
   const select = el("select", { id: "hotkey", "aria-label": "Shortcut letter", onchange: (event) => {
+    formEdited();
     state.form.hotkey = event.target.value.toLowerCase();
     document.getElementById("hotkey-hint").textContent = hint();
   } }, ...LETTERS.map((letter) => el("option", { value: letter }, letter)));
