@@ -9,7 +9,7 @@ local obj = {}
 obj.__index = obj
 
 obj.name = "Penwise"
-obj.version = "0.6.2"
+obj.version = "0.6.3"
 obj.author = "LuckyLetter"
 obj.homepage = "https://github.com/LuckyLetter/penwise"
 obj.license = "Apache-2.0 - https://opensource.org/licenses/Apache-2.0"
@@ -315,7 +315,10 @@ function obj:_showView(title, view, command, waiting)
     local ok, data = pcall(hs.json.decode, stdout or "")
     if ok and type(data) == "table" then
       data.type = view
-      if view == "settings" then data.access = hs.accessibilityState() end
+      if view == "settings" then
+        data.access = hs.accessibilityState()
+        data.hotkey = hotkeyLabel((self.hotkeys or {}).fix) -- what to press once it works
+      end
       self:_send(hs.json.encode(data))
     else
       self:_send(hs.json.encode({ type = "note", title = title, text = stderr or "" }))
@@ -992,6 +995,9 @@ function obj:_onMessage(body)
     self:_saveSettings(body.settings)
   elseif body.action == "paste-key" then
     self:_send(hs.json.encode({ type = "pasted", text = hs.pasteboard.getContents() or "" }))
+  elseif body.action == "try" then
+    self:_close()
+    self:_runQuietly("try")
   elseif body.action == "open-url" then
     hs.urlevent.openURL(body.url)
   elseif body.action == "cancel" then

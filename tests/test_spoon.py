@@ -992,3 +992,16 @@ def test_saving_shows_each_step_that_takes_a_while_then_the_result(config, tmp_p
         "after": "an error",
         "seconds": 1.5,
     }
+
+
+def test_settings_know_your_hotkey_and_open_the_practice_note(config):
+    spoon = Spoon("stream")
+    spoon.run('spoon:bindHotkeys({ fix = { { "ctrl", "alt" }, "e" } })')
+    spoon.run("spoon:showSettings()")
+    spoon.message({"action": "ready"})
+    spoon.run_tasks()
+    assert spoon.events[-1]["hotkey"] == "⌃⌥E"
+    spoon.message({"action": "try"})
+    spoon.run_tasks()
+    assert not spoon.lua.globals().PANEL.visible
+    assert "ran -m penwise try" in spoon.log

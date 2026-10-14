@@ -524,6 +524,12 @@ function renderSettings() {
   } else if (state.saved && state.saved.ok) {
     parts.push(el("div", { class: "result good" },
       `It works: “${state.saved.before}” → “${state.saved.after}” (${state.saved.seconds}s)`));
+    // The first time: what to do next.
+    if (state.firstRun) {
+      parts.push(el("div", { class: "hint", id: "next" },
+        `You're all set: click in any text box and press ${state.settings.hotkey || "⌃⌥P"}. `,
+        el("button", { type: "button", class: "link", onclick: () => post({ action: "try" }) }, "Try it on a practice note")));
+    }
   } else if (state.saved) {
     const link = state.saved.link;
     parts.push(el("div", { class: "result error" }, state.saved.message, link && " ",
@@ -719,7 +725,7 @@ window.penwise = {
       case "settings":
         stopTimers();
         Object.assign(state, {
-          status: "settings", original: "", settings: event, saving: false, saved: null,
+          status: "settings", original: "", settings: event, saving: false, saved: null, firstRun: !event.configured,
           form: event.provider === LOCAL
             ? { where: LOCAL, base_url: "", model: event.model }
             : { where: "api", base_url: event.base_url, model: event.model },

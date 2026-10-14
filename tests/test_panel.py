@@ -425,3 +425,17 @@ def test_settings_show_the_model_download_then_link_to_ollama_when_it_is_missing
     assert sent(page)[-1] == {"action": "open-url", "url": "https://ollama.com/download"}
     page.locator("#primary").click()  # Save again, once it's open
     assert page.locator("#saving").inner_text() == "Saving and testing…"
+
+
+def test_the_first_time_settings_work_they_say_what_to_do_next(page):
+    send(page, {**SETTINGS, "hotkey": "⌃⌥E"})  # not set up yet, and a hotkey of your own
+    page.locator("#primary").click()
+    send(page, {"type": "saved", "saved": True, "ok": True, "before": "a eror", "after": "an error", "seconds": 0.8})
+    assert page.locator("#next").inner_text().startswith("You're all set: click in any text box and press ⌃⌥E.")
+    page.get_by_role("button", name="Try it on a practice note").click()
+    assert sent(page)[-1] == {"action": "try"}
+
+    send(page, {**SETTINGS, "configured": True})  # later: just the result
+    page.locator("#primary").click()
+    send(page, {"type": "saved", "saved": True, "ok": True, "before": "a eror", "after": "an error", "seconds": 0.8})
+    assert page.locator("#next").count() == 0
