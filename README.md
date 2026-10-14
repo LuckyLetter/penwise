@@ -68,7 +68,9 @@ Three design rules keep it trustworthy:
 
    The first time, macOS says it can't check the app, because it isn't signed by an Apple developer yet. Click
    **Done**, open **System Settings → Privacy & Security**, scroll down, and click **Open Anyway** next to
-   *Install Penwise*.
+   *Install Penwise*. If macOS says instead that the app *is damaged*, it is the same missing signature: paste
+   `xattr -cr ~/Downloads/Install\ Penwise.app` in Terminal (where the app is, if not in Downloads), press Return,
+   and open it again. Once Penwise is installed, you can delete the installer.
 
 2. **Choose a model** in the Penwise window that opens: *On this Mac* (free and private, in
    [Ollama](https://ollama.com); Save starts it and downloads the model, unless you have one already) or *API*
