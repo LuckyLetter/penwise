@@ -10,7 +10,19 @@ import platform
 import sys
 import time
 
-from penwise import __version__, config, engine, history, presets, render, settings, setup_mac, updater, wizard
+from penwise import (
+    __version__,
+    config,
+    engine,
+    history,
+    presets,
+    render,
+    settings,
+    setup_mac,
+    uninstall,
+    updater,
+    wizard,
+)
 from penwise.config import ConfigError
 from penwise.llm import ChatClient, LLMError
 
@@ -107,6 +119,12 @@ def build_parser() -> argparse.ArgumentParser:
 
     p = sub.add_parser("try", help="open a practice note to try the hotkey on (macOS)")
     p.set_defaults(run=cmd_try)
+
+    p = sub.add_parser("uninstall", help="remove Penwise: the hotkey, your settings and history, and Penwise itself")
+    p.add_argument("--yes", action="store_true", help="don't ask first")
+    p.add_argument("--hammerspoon", action="store_true", help="also move Hammerspoon to the Trash")
+    p.add_argument("--json", action="store_true", help="say what was removed as JSON")
+    p.set_defaults(run=cmd_uninstall)
 
     p = sub.add_parser("doctor", help="check your setup and test the model")
     p.set_defaults(run=cmd_doctor)
@@ -315,6 +333,21 @@ def cmd_settings(args: argparse.Namespace) -> int:
     result = settings.save(request, lambda text: print(json.dumps({"type": "progress", "text": text}), flush=True))
     print(json.dumps(result))
     return 0 if result["ok"] else 1
+
+
+def cmd_uninstall(args: argparse.Namespace) -> int:
+    what = "the hotkey, your settings, API key and history, and Penwise itself"
+    if not args.yes and not wizard.confirm(f"Remove {what}?", default=False):
+        print("Nothing was removed.")
+        return 1
+    removed = uninstall.run(remove_hammerspoon=args.hammerspoon)
+    if args.json:
+        print(json.dumps({"removed": removed}), flush=True)
+    else:
+        print(f"✓ Removed {', '.join(removed)}." if removed else "Penwise wasn't installed here.")
+    if args.hammerspoon:
+        uninstall.quit_hammerspoon()  # last: it may be what started this command
+    return 0
 
 
 def cmd_try(args: argparse.Namespace) -> int:

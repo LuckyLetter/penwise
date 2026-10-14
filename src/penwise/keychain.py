@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import contextlib
 import getpass
 import platform
 import shutil
@@ -46,3 +47,9 @@ def read() -> str:
     except (OSError, subprocess.TimeoutExpired):
         return ""
     return out.stdout.strip() if out.returncode == 0 else ""
+
+
+def delete() -> None:
+    """Remove the key from the Keychain, if it is there."""
+    with contextlib.suppress(OSError, subprocess.TimeoutExpired):
+        subprocess.run(["security", "delete-generic-password", "-s", SERVICE], **_QUIET)

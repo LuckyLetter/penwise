@@ -9,7 +9,7 @@ local obj = {}
 obj.__index = obj
 
 obj.name = "Penwise"
-obj.version = "0.6.16"
+obj.version = "0.6.17"
 obj.author = "LuckyLetter"
 obj.homepage = "https://github.com/LuckyLetter/penwise"
 obj.license = "Apache-2.0 - https://opensource.org/licenses/Apache-2.0"
@@ -291,6 +291,8 @@ function obj:_menuItems()
     { title = "Try it on a practice note", fn = function() self:_runQuietly("try") end },
     { title = "Settings…", fn = function() self:showSettings() end },
     { title = "Check my setup…", fn = function() self:checkSetup() end },
+    { title = "-" },
+    { title = "Uninstall Penwise…", fn = function() self:showUninstall() end },
   }) do
     table.insert(items, item)
   end
@@ -322,12 +324,7 @@ end
 -- view of the given type, or plain text for a "note". It stays open when you switch apps (to
 -- copy an API key, say).
 function obj:_showView(title, view, command, waiting)
-  self.target = hs.window.focusedWindow()
-  self.app = hs.application.frontmostApplication() -- to go back to when you close it
-  self.fullScreen = self.target ~= nil and self.target:isFullScreen() == true
-  self.anchors = nil
-  self:_showPanel()
-  self.keepOpen = true
+  self:_showWindow()
   self:_send(hs.json.encode({ type = "note", title = title, text = waiting or "Loading…" }))
   self.viewTask = hs.task.new(self.bin, function(_, stdout, stderr)
     if view == "note" then
@@ -350,6 +347,43 @@ function obj:_showView(title, view, command, waiting)
     end
   end, concat(self.args, command))
   self.viewTask:start()
+end
+
+-- The panel in the middle of the screen, as a window that stays open when you switch apps.
+function obj:_showWindow()
+  self.target = hs.window.focusedWindow()
+  self.app = hs.application.frontmostApplication() -- to go back to when you close it
+  self.fullScreen = self.target ~= nil and self.target:isFullScreen() == true
+  self.anchors = nil
+  self:_showPanel()
+  self.keepOpen = true
+end
+
+--- Penwise:showUninstall()
+--- Method
+--- Asks whether to remove Penwise (and Hammerspoon, when the installer put it there for Penwise).
+function obj:showUninstall()
+  self:_showWindow()
+  self:_send(hs.json.encode({ type = "uninstall", hammerspoon = self.background == true }))
+end
+
+-- Remove Penwise: `penwise uninstall` deletes its files and itself; Hammerspoon, if it stays,
+-- no longer starts at login for Penwise, shows its own icon again, and reloads without Penwise.
+function obj:_uninstall(withHammerspoon)
+  self:_send(hs.json.encode({ type = "note", title = "Uninstall Penwise", text = "Removing Penwise…" }))
+  if self.background then
+    hs.autoLaunch(false)
+    if not withHammerspoon then hs.menuIcon(true) end
+  end
+  local args = { "uninstall", "--yes" }
+  if withHammerspoon then table.insert(args, "--hammerspoon") end -- it quits Hammerspoon last
+  self.uninstallTask = hs.task.new(self.bin, function(code)
+    self:_close()
+    self:stop()
+    hs.alert.show(code == 0 and "Penwise is uninstalled." or "Penwise couldn't remove everything.", 4)
+    if not withHammerspoon then hs.timer.doAfter(1, function() hs.reload() end) end
+  end, concat(self.args, args))
+  self.uninstallTask:start()
 end
 
 -- Save the settings from the settings view, then show whether the model works. They go to
@@ -1025,6 +1059,8 @@ function obj:_onMessage(body)
     self:_saveSettings(body.settings)
   elseif body.action == "paste-key" then
     self:_send(hs.json.encode({ type = "pasted", text = hs.pasteboard.getContents() or "" }))
+  elseif body.action == "uninstall" then
+    self:_uninstall(body.hammerspoon == true)
   elseif body.action == "try" then
     self:_close()
     self:_runQuietly("try")

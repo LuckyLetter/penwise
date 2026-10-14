@@ -160,6 +160,10 @@
     cursor: pointer;
   }
   button.primary { border: 0; background: var(--accent); color: var(--accent-text); }
+  /* Uninstall: red, and no ↩ hint, since Return doesn't press it. */
+  button.primary.danger { background: var(--del); color: #fff; }
+  button.primary.danger kbd { display: none; }
+  label.check { display: flex; gap: 8px; align-items: baseline; margin-top: 12px; }
   button.secondary { border: 1px solid var(--border); background: var(--bg); color: var(--text); }
   button:disabled { opacity: 0.4; cursor: default; }
   [hidden] { display: none !important; }
@@ -639,6 +643,18 @@ function render() {
     main.append(el("h2", {}, state.note.title), el("pre", { class: "note-text" }, state.note.text));
   } else if (state.status === "settings") {
     main.append(...renderSettings());
+  } else if (state.status === "uninstall") {
+    main.append(
+      el("div", { class: "title" }, "Uninstall Penwise"),
+      el("div", {}, "This removes the hotkey, your settings, API key and history, and Penwise itself."),
+    );
+    if (state.uninstall.offer) {
+      const box = el("input", { type: "checkbox", id: "with-hammerspoon",
+        onchange: (event) => { state.uninstall.hammerspoon = event.target.checked; } });
+      box.checked = state.uninstall.hammerspoon;
+      main.append(el("label", { class: "check" }, box,
+        " Also move Hammerspoon to the Trash: it was installed for Penwise."));
+    }
   } else if (state.status === "error") {
     main.append(el("div", { class: "error" }, state.error));
     const link = state.errorLink; // a page where the fix is, like adding credits
@@ -666,9 +682,10 @@ function render() {
     }
   }
 
-  const reading = state.status === "insights" || state.status === "note" || state.status === "settings";
+  const reading = ["insights", "note", "settings", "uninstall"].includes(state.status);
   const button = document.getElementById("primary");
   button.firstChild.textContent = primaryLabel();
+  button.classList.toggle("danger", state.status === "uninstall");
   button.disabled = state.status === "loading" || state.status === "idle" || state.saving;
   document.getElementById("modes").hidden = reading;
   // Improve's tone: guessed from the app, one click to change.
@@ -712,6 +729,7 @@ function replace() {
 function primaryLabel() {
   if (state.status === "settings") return state.saved && state.saved.ok ? "Done" : "Save";
   if (state.status === "error") return "Try again";
+  if (state.status === "uninstall") return "Uninstall";
   if (state.status === "loading" || (state.status === "ready" && state.changes.length)) {
     return state.readonly ? "Copy" : "Replace";
   }
@@ -719,6 +737,10 @@ function primaryLabel() {
 }
 
 function primary() {
+  if (state.status === "uninstall") {
+    post({ action: "uninstall", hammerspoon: state.uninstall.offer && state.uninstall.hammerspoon });
+    return;
+  }
   if (state.status === "settings" && !(state.saved && state.saved.ok)) saveSettings();
   else if (state.status === "error") retry();
   else if (state.status === "ready" && state.changes.length) state.readonly ? copy() : replace();
@@ -783,6 +805,10 @@ window.penwise = {
         stopTimers();
         Object.assign(state, { status: "note", original: "", note: { title: event.title, text: event.text } });
         break;
+      case "uninstall":
+        stopTimers();
+        Object.assign(state, { status: "uninstall", original: "", uninstall: { offer: event.hammerspoon, hammerspoon: true } });
+        break;
       case "error":
         stopTimers();
         Object.assign(state, { status: "error", error: event.message, errorLink: event.link || null });
@@ -845,6 +871,8 @@ document.addEventListener("keydown", (event) => {
   const selection = String(window.getSelection());
   // In the settings, keys type and move between fields as usual; Return saves, Esc closes.
   if (state.status === "settings" && event.key !== "Enter" && event.key !== "Escape") return;
+  // Uninstalling takes a click: Return, the usual next step, must not remove anything.
+  if (state.status === "uninstall" && event.key !== "Escape") return;
   if (event.key === "Enter") {
     event.preventDefault();
     primary();

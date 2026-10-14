@@ -134,6 +134,10 @@ appears as its own change, so you can learn the phrase, and undo it if the trans
 **Updating:** download the newest *Install Penwise* and open it; your settings and hotkeys stay as they are.
 If something isn't working, *Check my setup* in the ✎ menu checks each part and says what to do.
 
+**Uninstalling:** *Uninstall Penwise…* in the ✎ menu removes the hotkey, your settings, API key and history, and
+Penwise itself; if Install Penwise put Hammerspoon there for it, Hammerspoon can go to the Trash too. In the
+Terminal: `penwise uninstall`. uv and the Python it downloaded stay, as other apps may use them.
+
 **Prefer the Terminal?** Install with [uv](https://docs.astral.sh/uv/) and run the guided setup, which asks the same
 questions and downloads Hammerspoon if needed:
 

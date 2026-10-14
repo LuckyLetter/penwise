@@ -511,3 +511,19 @@ def test_an_error_with_a_page_for_the_fix_links_to_it(page):
     page.get_by_role("button", name="Add credits").click()
     assert sent(page)[-1] == {"action": "open-url", "url": "https://openrouter.ai/settings/credits"}
     assert page.get_by_role("button", name="Open settings").count() == 0  # not where the fix is
+
+
+def test_uninstalling_takes_a_click_not_return(page):
+    send(page, {"type": "uninstall", "hammerspoon": True})
+    assert "removes the hotkey, your settings" in page.locator("main").inner_text()
+    assert page.locator("#primary").inner_text().startswith("Uninstall")
+    page.keyboard.press("Enter")  # the usual next step: not for removing things
+    assert not any(message.get("action") == "uninstall" for message in sent(page))
+    page.locator("#with-hammerspoon").uncheck()  # keep Hammerspoon
+    page.locator("#primary").click()
+    assert sent(page)[-1] == {"action": "uninstall", "hammerspoon": False}
+
+    send(page, {"type": "uninstall", "hammerspoon": False})  # Hammerspoon was there before Penwise
+    assert page.locator("#with-hammerspoon").count() == 0
+    page.locator("#primary").click()
+    assert sent(page)[-1] == {"action": "uninstall", "hammerspoon": False}

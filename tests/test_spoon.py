@@ -275,6 +275,8 @@ def test_the_menu_bar_offers_every_action_with_its_hotkey(config):
         "Try it on a practice note",
         "Settings…",
         "Check my setup…",
+        "-",
+        "Uninstall Penwise…",
     ]
     click(spoon, "Quick fix")
     spoon.run_tasks()
@@ -1050,3 +1052,21 @@ def test_until_a_model_is_chosen_the_hotkey_opens_the_settings(isolated, server,
     assert spoon.events[-1]["saved"] is True
     spoon.run('spoon:check("fix")')
     assert spoon.events[-1]["type"] == "begin"  # now it checks
+
+
+def test_uninstall_from_the_menu_removes_penwise_and_gives_hammerspoon_back(config, tmp_path):
+    spoon = Spoon("stream")
+    spoon.run("spoon.background = true; spoon:start()")  # installed by the installer
+    fake = tmp_path / "penwise"  # stands in for `penwise uninstall`, which really removes files
+    fake.write_text('#!/bin/sh\necho "$@" > "$(dirname "$0")/ran"\n')
+    fake.chmod(0o755)
+    spoon.run(f'spoon.bin = "{fake}"; spoon.args = {{}}')
+    click(spoon, "Uninstall Penwise")
+    spoon.message({"action": "ready"})
+    assert spoon.events[-1] == {"type": "uninstall", "hammerspoon": True}
+    spoon.message({"action": "uninstall", "hammerspoon": False})
+    spoon.run_tasks()
+    assert (tmp_path / "ran").read_text().strip() == "uninstall --yes"
+    log = spoon.log
+    assert "hammerspoon starts at login: false" in log and log.count("hammerspoon menu icon: true") == 1
+    assert "alert Penwise is uninstalled." in log and log[-1] == "reload hammerspoon config"
