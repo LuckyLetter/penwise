@@ -258,10 +258,15 @@ def test_one_button_does_what_comes_next(page):
 
 
 def test_a_note_is_shown_once_for_changes_of_the_same_kind(page):
+    send(page, {"type": "begin", "original": "We use two dataset and three model.", "mode": "fix"})
+    send(page, check_result("We use two dataset and three model.", "We use two datasets and three models."))
+    assert page.locator("li").count() == 2
+    assert page.locator("li .note").count() == 1  # both are plurals, with the same note
+
+    # A grammar point with a note of its own still shows it.
     send(page, {"type": "begin", "original": "She have two dataset.", "mode": "fix"})
     send(page, check_result("She have two dataset.", "She has two datasets."))
-    assert page.locator("li").count() == 2
-    assert page.locator("li .note").count() == 1  # both are "Word form"
+    assert page.locator("li .note").count() == 2
 
 
 def test_text_that_cant_be_edited_there_is_copied(page):
