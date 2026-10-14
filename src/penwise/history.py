@@ -91,7 +91,10 @@ def lesson(entry: dict) -> tuple[str, str]:
 
 def insights(path: Path | None = None, limit: int = 8) -> dict:
     entries = load(path)
-    by_lesson = Counter(lesson(e) for e in entries)
+    taught = [lesson(e) for e in entries]
+    by_lesson = Counter(taught)
+    # An example of each, from your own writing (the newest).
+    lesson_examples = {point: e.get("context", "") for point, e in zip(taught, entries, strict=True)}
     pairs = Counter(pair_key(e.get("before", ""), e.get("after", "")) for e in entries)
     examples: dict[str, str] = {}
     for e in reversed(entries):  # newest example wins
@@ -99,7 +102,9 @@ def insights(path: Path | None = None, limit: int = 8) -> dict:
     return {
         "total": len(entries),
         "first": entries[0].get("time") if entries else None,
-        "lessons": [(title, note, n) for (title, note), n in by_lesson.most_common(limit)],
+        "lessons": [
+            (title, note, n, lesson_examples[title, note]) for (title, note), n in by_lesson.most_common(limit)
+        ],
         "repeated": [(k, n, examples.get(k, "")) for k, n in pairs.most_common(limit) if n > 1],
     }
 

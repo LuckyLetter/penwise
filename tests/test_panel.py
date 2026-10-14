@@ -194,7 +194,7 @@ def test_insights_view(page):
             "total": 7,
             "since": "2026-10-12",
             "categories": [
-                {"label": "Articles", "count": 5, "note": "Use “an” before a vowel sound."},
+                {"label": "a or an", "count": 5, "note": "Use “an” before a vowel sound.", "example": "is [a] LLM"},
                 {"label": "Prepositions", "count": 2, "note": "Learn them in phrases."},
             ],
             "repeated": [{"pair": "in → on", "count": 2, "example": "results [in] the other hand"}],
@@ -203,6 +203,7 @@ def test_insights_view(page):
     text = page.locator("main").inner_text()
     assert "7 changes you accepted since 2026-10-12" in text
     assert "Use “an” before a vowel sound." in text
+    assert "e.g. …is [a] LLM…" in text  # from your own writing
     assert "e.g. …results [in] the other hand…" in text
     assert page.locator(".bar").count() == 2
     assert page.locator("#modes").is_hidden()

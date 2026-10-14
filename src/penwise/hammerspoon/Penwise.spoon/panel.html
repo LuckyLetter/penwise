@@ -390,6 +390,7 @@ function renderInsights(data) {
         el("span", { class: "count" }, `${category.count}×`),
         el("div", { class: "bar", style: `width: ${Math.max(4, (100 * category.count) / most)}%` }),
         category.note && el("span", { class: "note" }, category.note),
+        category.example && el("span", { class: "example" }, `e.g. …${category.example}…`),
       ),
     );
   }

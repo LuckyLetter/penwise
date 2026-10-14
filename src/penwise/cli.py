@@ -255,7 +255,10 @@ def cmd_insights(args: argparse.Namespace) -> int:
                 {
                     "total": data["total"],
                     "since": (data["first"] or "")[:10],
-                    "categories": [{"label": title, "count": n, "note": note} for title, note, n in data["lessons"]],
+                    "categories": [
+                        {"label": title, "count": n, "note": note, "example": example}
+                        for title, note, n, example in data["lessons"]
+                    ],
                     "repeated": [{"pair": pair, "count": n, "example": ex} for pair, n, ex in data["repeated"]],
                 },
                 ensure_ascii=False,
@@ -267,8 +270,8 @@ def cmd_insights(args: argparse.Namespace) -> int:
         return 0
     print(f"{data['total']} accepted changes since {data['first'][:10]}\n")
     print("What you fix most:")
-    for title, _, n in data["lessons"]:
-        print(f"  {n:>4}  {title}")
+    for title, _, n, example in data["lessons"]:
+        print(f"  {n:>4}  {title}" + (f"   e.g. …{example}…" if example else ""))
     if data["repeated"]:
         print("\nFixes you've made more than once:")
         for pair, n, example in data["repeated"]:

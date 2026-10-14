@@ -29,7 +29,7 @@ def test_insights(tmp_path):
     history.record([accepted("in", "on", "preposition")] * 3 + [accepted("a", "an", "article")], path)
     data = history.insights(path)
     assert data["total"] == 4
-    assert data["lessons"][0] == ("Prepositions", NOTES["preposition"], 3)
+    assert data["lessons"][0] == ("Prepositions", NOTES["preposition"], 3, "the [in] of")
     assert data["repeated"] == [("in → on", 3, "the [in] of")]
 
 
@@ -47,6 +47,6 @@ def test_insights_name_the_grammar_point_from_the_words_around_the_fix(tmp_path)
     plural = {"before": "dataset", "after": "datasets", "context_before": "two ", "context_after": " and"}
     history.record([agreement, agreement, plural], path)
     assert history.insights(path)["lessons"] == [
-        ("Subject–verb agreement", AGREEMENT_NOTE, 2),
-        ("Word form", NOTES["word-form"], 1),
+        ("Subject–verb agreement", AGREEMENT_NOTE, 2, "Each of the models [are] tested."),
+        ("Word form", NOTES["word-form"], 1, "two [dataset] and"),
     ]
