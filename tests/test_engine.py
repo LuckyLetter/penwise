@@ -190,6 +190,7 @@ def test_filling_in_allows_a_longer_answer_but_not_a_reply():
         ("we compare with LLMs", "We compare with large language models.", "We compare with LLMs."),
         ("results in table 2", "Results are in Table II.", "Results are in Table 2."),
         ("see table 2.", "See Table II.", "See Table 2."),  # the period was there already
+        ("the accuracy is 0.85", "The accuracy is 85%.", "The accuracy is 0.85."),  # 0.85 is one number
     ],
 )
 def test_punctuation_is_added_even_where_a_held_back_change_ends(text, edited, pasted):
