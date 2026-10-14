@@ -198,13 +198,51 @@ APOSTROPHE_NOTE = "An apostrophe marks possession (the model's output) or a cont
 GAP_NOTE = "The word that fits your [[?]]. Words that go together (consistent with, express gratitude) are best learned as a pair."
 GAP = re.compile(r"\[\[\s*\?*\s*\]\]")
 
+# Grammar points common in research writing by non-native speakers, each with its own note.
+AGREEMENT_NOTE = "The verb agrees with its subject: the result is, the results are, each of the models is."
+DEMONSTRATIVE_NOTE = "“this/that” go with a singular noun, “these/those” with a plural one: this result, these results."
+BASE_FORM_NOTE = "After do/does/did, can, will, should, must or “to”, use the verb's base form: didn't find, can learn."
+BE_VERB_NOTE = "No “is/are” before a main verb in the present tense: it depends, they need (not it is depend)."
+PAST_TIME_NOTE = "With a finished time (in 2019, last year), use the past tense: it was proposed in 2019."
+DOUBLE_COMPARISON_NOTE = (
+    "“better” and “fastest” already compare: no “more” or “most” before them (better, not more better)."
+)
+ALTHOUGH_BUT_NOTE = (
+    "“Although” and “but” don't go together: use one (Although it is fast, it is large / It is fast, but it is large)."
+)
+CAN_ABLE_NOTE = "“can” and “be able to” mean the same: use one (it can learn, or it is able to learn)."
+AGREEMENT = [{"is", "are"}, {"was", "were"}, {"has", "have"}, {"does", "do"}, {"doesn't", "don't"}, {"isn't", "aren't"}]
+DEMONSTRATIVES = [{"this", "these"}, {"that", "those"}]
+BASE_FORM_AFTER = {
+    "do",
+    "does",
+    "did",
+    "don't",
+    "doesn't",
+    "didn't",
+    "can",
+    "can't",
+    "cannot",
+    "could",
+    "couldn't",
+    "will",
+    "won't",
+    "would",
+    "should",
+    "must",
+    "may",
+    "might",
+    "to",
+}
+COMPARATIVES = {"better", "best", "worse", "worst", "less", "least", "more", "most"}
+
 
 def words(text: str) -> list[str]:
     return [w.lower().replace("’", "'") for w in WORD.findall(text)]
 
 
-def classify(before: str, after: str) -> tuple[str, str]:
-    """Return (category, note) for one change."""
+def classify(before: str, after: str, context_before: str = "", context_after: str = "") -> tuple[str, str]:
+    """Return (category, note) for one change; the text around it helps name some grammar points."""
     b, a = before.strip(), after.strip()
     bw, aw = words(b), words(a)
 
@@ -220,6 +258,9 @@ def classify(before: str, after: str) -> tuple[str, str]:
     key = frozenset({" ".join(bw), " ".join(aw)})
     if len(key) == 2 and key in CONFUSABLE:
         return "confusable", CONFUSABLE[key]
+    grammar = _grammar_point(bw, aw, words(context_before)[-1:], words(context_after)[:1], context_before)
+    if grammar:
+        return grammar
 
     if len(bw) == 1 and len(aw) == 1:
         x, y = bw[0], aw[0]
@@ -255,8 +296,43 @@ def classify(before: str, after: str) -> tuple[str, str]:
 
 def annotate(changes: list[Change]) -> None:
     for change in changes:
-        change.category, change.note = classify(change.before, change.after)
+        change.category, change.note = classify(
+            change.before, change.after, change.context_before, change.context_after
+        )
         change.label = LABELS[change.category]
+
+
+def _grammar_point(bw: list[str], aw: list[str], previous: list[str], following: list[str], context_before: str):
+    """(category, note) for a grammar point that has a note of its own, or None."""
+    if len(bw) == 1 and len(aw) == 1:
+        x, y = bw[0], aw[0]
+        if {x, y} in AGREEMENT:
+            return "word-form", AGREEMENT_NOTE
+        if {x, y} in DEMONSTRATIVES:
+            return "word-form", DEMONSTRATIVE_NOTE
+        # didn't found → didn't find; but not "contribute to improve" → "to improving".
+        to_base_form = _same_word(x, y) and len(y) <= len(x) and not y.endswith("ing")
+        if previous and previous[0] in BASE_FORM_AFTER and to_base_form:
+            return "word-form", BASE_FORM_NOTE
+    # "is depend" → "depends"; "is used" → "uses" is another matter.
+    be_verb = len(bw) == 2 and bw[0] in ("is", "are", "am") and not bw[1].endswith(("ed", "en"))
+    if be_verb and len(aw) == 1 and _same_word(bw[1], aw[0]):
+        return "word-form", BE_VERB_NOTE
+    if bw in (["has", "been"], ["have", "been"]) and aw in (["was"], ["were"]):
+        return "word-form", PAST_TIME_NOTE
+    if aw:
+        return None
+    if (
+        bw in (["more"], ["most"])
+        and following
+        and (following[0] in COMPARATIVES or following[0].endswith(("er", "est")))
+    ):
+        return "removed", DOUBLE_COMPARISON_NOTE
+    if bw == ["but"] and re.search(r"\b(al)?though\b", context_before, re.IGNORECASE):
+        return "removed", ALTHOUGH_BUT_NOTE
+    if bw in (["able", "to"], ["be", "able", "to"]) and previous and previous[0] in ("can", "could", "cannot", "can't"):
+        return "removed", CAN_ABLE_NOTE
+    return None
 
 
 def _punctuation_note(before: str, after: str) -> str:
