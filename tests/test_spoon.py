@@ -960,11 +960,12 @@ def test_the_settings_stay_open_while_you_fetch_a_key(config):
 def test_hammerspoon_starts_at_login_and_stays_out_of_sight_when_asked(config):
     spoon = Spoon("stream")
     spoon.run("spoon:start()")
-    assert "hammerspoon starts at login: true" in spoon.log
-    assert not any("icon" in line for line in spoon.log)  # people who use Hammerspoon keep its icons
+    # People who use Hammerspoon themselves keep their own choices: login, icons.
+    assert not any(line.startswith("hammerspoon") for line in spoon.log)
 
     spoon = Spoon("stream")
     spoon.run("spoon.background = true; spoon:start()")  # installed by the Penwise installer
+    assert "hammerspoon starts at login: true" in spoon.log
     assert "hammerspoon menu icon: false" in spoon.log and "hammerspoon dock icon: false" in spoon.log
 
 

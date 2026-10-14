@@ -9,7 +9,7 @@ local obj = {}
 obj.__index = obj
 
 obj.name = "Penwise"
-obj.version = "0.6.18"
+obj.version = "0.6.19"
 obj.author = "LuckyLetter"
 obj.homepage = "https://github.com/LuckyLetter/penwise"
 obj.license = "Apache-2.0 - https://opensource.org/licenses/Apache-2.0"
@@ -195,11 +195,12 @@ end
 --- Method
 --- Adds the Penwise icon to the menu bar, so every action is a click away.
 function obj:start()
-  -- Penwise should work after a restart, and it can't read or paste text without Accessibility:
-  -- start Hammerspoon at login, and let macOS ask for the permission now rather than at the hotkey.
-  hs.autoLaunch(true)
+  -- Penwise can't read or paste text without Accessibility: let macOS ask now, not at the hotkey.
   local allowed = hs.accessibilityState(true)
   if self.background then
+    -- Hammerspoon is there for Penwise (the installer put it there): start it at login, out of
+    -- sight. People who use Hammerspoon themselves keep their own choices.
+    hs.autoLaunch(true)
     hs.menuIcon(false)
     hs.dockIcon(false)
     -- Hammerspoon opens its own preferences until it has the permission; Penwise's window asks.
