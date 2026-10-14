@@ -13,8 +13,8 @@ Setup is one download: open it, choose a model, and you're done.
 
 - **Fixes your English anywhere on your Mac.** Press **⌃⌥P** in any text box, review the changes right
   next to your text, press Return. No copying and pasting, and usually no selecting either.
-- **Teaches as it fixes.** Every change has a label (Articles, Prepositions, Word form, …) and a short rule;
-  *Your recurring fixes* shows what you get wrong most often.
+- **Teaches as it fixes.** Every change has a label (Articles, Subject–verb agreement, Possessives, …) and a short
+  rule; *Your recurring fixes* shows the rules you need most often, each with an example from your own writing.
 - **Fills in what you can't say yet.** Write a phrase in your own language or as `[[your idea]]`, or leave
   `[[?]]` where you can't find the word, and Penwise writes it in English.
 - **Safe and in your control.** It never changes numbers, citations, acronyms, math, code or links on its own; you
@@ -90,8 +90,8 @@ When you want more:
 | **⌃⌥⌘P** | quick fix: replace right away, with a one-line summary |
 
 Prefer clicking? The **✎ icon in the menu bar** has the same three actions, plus *Your recurring fixes*,
-*Try it on a practice note* (handy for showing a colleague; also `penwise try`), *Settings* (model and API key), and
-*Check my setup*.
+*Try it on a practice note* (handy for showing a colleague; also `penwise try`), *Settings* (model, API key and
+shortcut), *Check my setup*, and *Uninstall Penwise*.
 
 **You rarely need to select anything.** With nothing selected, Penwise reads the text straight from the app: in a
 short text box (a message, a comment, up to 2,000 characters) it takes the whole box; in a longer document, the
@@ -159,8 +159,9 @@ penwise model
 penwise model mistralai/mistral-small-2603
 ```
 
-Every model is reached the same way, through an OpenAI-compatible chat API, so any of these work. `penwise setup`
-fills in the right `base_url` for OpenRouter and Ollama.
+Every model is reached the same way, through an OpenAI-compatible chat API, so any of these work. In Settings,
+*On this Mac* uses Ollama, and for *API* a pasted OpenRouter, OpenAI, Anthropic, Groq, Gemini or xAI key fills in the
+address by itself (`penwise setup` does the same in the Terminal).
 
 | Where                 | `base_url`                      | `model` (example)                         |
 | --------------------- | ------------------------------- | ----------------------------------------- |
@@ -179,7 +180,7 @@ gives better corrections, and its one-line explanations are worth turning on (`e
 suggests, Penwise turns that down automatically (`reasoning_effort`). For a hotkey tool, a fast model that doesn't
 think by default, like `mistralai/mistral-small-2603`, feels best.
 
-**API keys:** `penwise setup` stores the key in the macOS Keychain and points the config at it with
+**API keys:** Settings (and `penwise setup`) store the key in the macOS Keychain and points the config at it with
 `api_key_command = "security find-generic-password -s penwise -w"`. `api_key_env = "SOME_VAR"` and
 `api_key = "..."` also work. Local servers need no key.
 
@@ -252,7 +253,7 @@ System Settings → Keyboard → Keyboard Shortcuts → Services. You get the co
 Tested on a Mac with Notes, Visual Studio Code, Claude, Codex, WeChat, Chrome (the address bar and boxes in web
 pages, such as Google's search box) and Terminal (shell commands, and prompts in Claude Code), also with apps in
 full screen. Other apps work the same way when they let other apps read their text boxes; if one doesn't,
-`penwise doctor` shows what the hotkey did there.
+*Check my setup* in the ✎ menu shows what the hotkey did there.
 
 ## Limitations
 
@@ -266,8 +267,9 @@ full screen. Other apps work the same way when they let other apps read their te
   pastes the fix. For text you can't edit, like a web page, the button says *Copy*.
 - Some apps (WeChat, Codex, …) don't let other apps read their text boxes. There Penwise selects all in the box
   and copies it, as you would by hand, and Replace selects all again and pastes.
-- If the hotkey doesn't do what you expect, run `penwise doctor`: it ends with what the hotkey did, step by step
-  (the app, the kind of text box, what was selected and pasted; never your text).
+- If the hotkey doesn't do what you expect, choose *Check my setup* in the ✎ menu (`penwise doctor` in the
+  Terminal): it ends with what the hotkey did, step by step (the app, the kind of text box, what was selected and
+  pasted, and whether the whole fix arrived; never your text).
 
 ## Development
 
