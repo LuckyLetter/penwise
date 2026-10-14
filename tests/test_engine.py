@@ -212,3 +212,12 @@ def test_punctuation_is_added_even_where_a_held_back_change_ends(text, edited, p
 def test_spacing_and_grammar_around_numbers_are_applied(text, edited):
     result = engine.check(text, fake_chat({text: edited}))
     assert result.edited == edited and not any(c.risk for c in result.changes)
+
+
+def test_an_added_period_is_its_own_change_with_its_own_lesson():
+    result = engine.check("we have 1,000 sample", fake_chat({"we have 1,000 sample": "We have 1,000 samples."}))
+    assert [(c.before, c.after, c.label) for c in result.changes] == [
+        ("we", "We", "Capitalization"),
+        ("sample", "samples", "Word form"),
+        ("", ".", "Punctuation"),
+    ]

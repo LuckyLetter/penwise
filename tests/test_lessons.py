@@ -7,6 +7,7 @@ from penwise.lessons import (
     COMMA_REMOVED_NOTE,
     GAP_NOTE,
     LABELS,
+    POSSESSIVE,
     SPLICE_NOTE,
     annotate,
     classify,
@@ -63,3 +64,14 @@ def test_annotate_sets_label_and_note():
     assert change.category == "word-form"
     assert change.label == LABELS["word-form"]
     assert change.note
+
+
+@pytest.mark.parametrize(
+    "before, after",
+    [("you", "your"), ("it", "Its"), ("we", "Our"), ("they", "their"), ("much", "many"), ("maybe", "may be")],
+)
+def test_pronouns_for_possessives_and_other_easily_mixed_words(before, after):
+    category, note = classify(before, after)
+    assert category == "confusable"
+    if before in ("you", "it", "we", "they"):
+        assert note == POSSESSIVE

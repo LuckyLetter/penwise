@@ -105,6 +105,8 @@ UNCOUNTABLE = {
     "training",
 }
 
+POSSESSIVE = "“our method”, “its accuracy”, “their results”: a possessive (my, your, its, our, their, his, her) before a noun shows whose it is."
+
 # Commonly confused words. Either direction gets the same note.
 CONFUSABLE = {
     frozenset({"its", "it's"}): "“its” means belonging to it (its accuracy); “it's” means it is or it has.",
@@ -138,6 +140,15 @@ CONFUSABLE = {
     frozenset({"lead", "led"}): "The past tense of “lead” is “led”.",
     frozenset({"loss", "lose"}): "“lose” is the verb; “loss” is the noun.",
     frozenset({"to", "too"}): "“too” = also, or more than enough; “to” is the preposition or infinitive marker.",
+    frozenset({"many", "much"}): "“many” for things you can count (many samples); “much” for amounts (much data).",
+    frozenset({"maybe", "may be"}): "“maybe” = perhaps (Maybe it works); “may be” is the verb (It may be faster).",
+    frozenset({"whether", "weather"}): "“whether” introduces a choice (whether it works); “weather” is rain and sun.",
+    frozenset({"quite", "quiet"}): "“quite” = fairly or very (quite fast); “quiet” = not loud.",
+    # A pronoun where its possessive belongs, as in "we method", "it accuracy".
+    **{
+        frozenset(pair): POSSESSIVE
+        for pair in (("you", "your"), ("it", "its"), ("they", "their"), ("we", "our"), ("he", "his"), ("she", "her"))
+    },
 }
 
 LABELS = {

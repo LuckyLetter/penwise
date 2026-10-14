@@ -210,7 +210,7 @@ def check(
                 "Try again, try the other mode, or use a larger model."
             )
         segments, changes = textdiff.diff(piece, edited, first_id=len(result.changes))
-        segments, changes = _split_end_punctuation(segments, changes, keep, first_id=len(result.changes))
+        segments, changes = _split_end_punctuation(segments, changes, first_id=len(result.changes))
         for seg in segments:
             _append(result.segments, seg)
         result.changes.extend(changes)
@@ -242,11 +242,13 @@ def check(
     return result
 
 
-def _split_end_punctuation(segments: list, changes: list[Change], keep, first_id: int) -> tuple[list, list[Change]]:
-    """Give the punctuation that ends a change Penwise won't apply on its own a change of its own.
+def _split_end_punctuation(segments: list, changes: list[Change], first_id: int) -> tuple[list, list[Change]]:
+    """Give the punctuation added at the end of a change a change of its own.
 
-    In "LLMs" → "large language models." the acronym stays unless you choose otherwise, but the
-    period is a fix by itself: split off, it is applied either way. Changes are numbered again.
+    It is a fix by itself, with its own lesson: "sample" → "samples." is a word form and a
+    period. And it is applied even where the rest is not: in "LLMs" → "large language models."
+    the acronym stays unless you choose otherwise, but the period goes in. Changes are numbered
+    again.
     """
     by_id = {c.id: c for c in changes}
     out_segments: list = []
@@ -258,13 +260,19 @@ def _split_end_punctuation(segments: list, changes: list[Change], keep, first_id
         change = by_id[seg]
         mark = _END_PUNCTUATION.search(change.after)
         parts = [change]
-        if mark and not change.before.endswith(mark.group()) and protect.risk(change.before, change.after, keep):
+        if mark and mark.start() > 0 and not change.before.endswith(mark.group()):
             contexts = {"context_before": change.context_before, "context_after": change.context_after}
-            parts = [
-                Change(id=0, before=change.before, after=change.after[: mark.start()], **contexts),
-                Change(id=0, before="", after=mark.group(), **contexts),
-            ]
+            rest = change.after[: mark.start()]
+            # "work" → "work." is just the period: the word stays plain text.
+            if rest == change.before:
+                parts = [change.before]
+            else:
+                parts = [Change(id=0, before=change.before, after=rest, **contexts)]
+            parts.append(Change(id=0, before="", after=mark.group(), **contexts))
         for part in parts:
+            if isinstance(part, str):
+                out_segments.append(part)
+                continue
             part.id = first_id + len(out_changes)
             out_changes.append(part)
             out_segments.append(part.id)
