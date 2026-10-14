@@ -47,7 +47,8 @@ FAKES = {
     "pgrep": "exit 0",
     "open": 'echo "open $*" >> "$COMMANDS"',
     "osascript": """shift  # "-": the script comes on stdin
-printf 'dialog %s' "$*" | tr '\\n' ' ' >> "$COMMANDS" && echo >> "$COMMANDS"  # one line each
+line="$(printf 'dialog %s' "$*" | tr '\\n' ' ')"
+echo "$line" >> "$COMMANDS"  # in one write: the progress dialog runs alongside the other commands
 cat > /dev/null
 case "${!#}" in
   Install) printf '%s' "$FAKE_ANSWER" ;;

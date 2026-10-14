@@ -332,6 +332,13 @@ def cmd_record(args: argparse.Namespace) -> int:
     return 0
 
 
+def _settings_hint() -> str:
+    """Where to change the settings: the ✎ menu once the hotkey is installed, else the guided setup."""
+    if platform.system() == "Darwin" and setup_mac.spoon_installed():
+        return "open Settings in the ✎ menu"
+    return "run `penwise setup`"
+
+
 def cmd_doctor(args: argparse.Namespace) -> int:
     ok = True
 
@@ -339,7 +346,7 @@ def cmd_doctor(args: argparse.Namespace) -> int:
         print(f"{'✓' if good else '✗'} {label:<11} {status}")
 
     path = config.config_path()
-    line("Config", f"{path}" if path.exists() else f"{path} (not found, using defaults; run `penwise setup`)")
+    line("Config", f"{path}" if path.exists() else f"{path} (not found, using defaults; {_settings_hint()})")
     try:
         cfg = config.load()
     except ConfigError as exc:
@@ -357,7 +364,7 @@ def cmd_doctor(args: argparse.Namespace) -> int:
         seconds = time.monotonic() - started
         line("Test", f'"{sample}" → "{result.edited}" ({seconds:.1f}s)')
     except (ConfigError, LLMError) as exc:
-        line("Test", f"{exc}\n              To change settings, run `penwise setup`.", good=False)
+        line("Test", f"{exc}\n              To change the settings, {_settings_hint()}.", good=False)
         ok = False
 
     if platform.system() == "Darwin":

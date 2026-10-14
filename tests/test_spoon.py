@@ -312,7 +312,21 @@ def test_an_error_offers_to_check_the_setup(isolated):
     spoon.run_tasks()
     assert spoon.events[-1]["type"] == "error"
     spoon.message({"action": "doctor"})
-    assert any(line.startswith("applescript") and "doctor" in line for line in spoon.log)
+    spoon.run_tasks()
+    note = spoon.events[-1]
+    assert note["type"] == "note" and note["title"] == "Check my setup"
+    assert "✗ Test        Could not reach http://127.0.0.1:9/v1" in note["text"]
+
+
+def test_check_my_setup_shows_each_part_in_the_panel(config):
+    spoon = Spoon("stream")
+    spoon.run("spoon:start()")
+    click(spoon, "Check my setup")
+    spoon.message({"action": "ready"})
+    assert spoon.events[-1] == {"type": "note", "title": "Check my setup", "text": "Checking each part…"}
+    spoon.run_tasks()
+    assert '✓ Test        "This sentence have a error." → "This sentence has an error."' in spoon.events[-1]["text"]
+    assert not any(line.startswith("applescript") for line in spoon.log)  # no Terminal
 
 
 def test_quick_fix_leaves_risky_changes_for_review(config):
@@ -678,9 +692,20 @@ def test_the_log_says_what_happened_without_your_text(config, tmp_path):
         "replace: field",
         "back in the app",
         "selected the text (⌘A), pasted the fix",
+        "after pasting: the text box has the fix",
     ]:
         assert step in log
     assert "untill" not in log and "until" not in log
+
+
+def test_the_log_says_when_part_of_the_fix_did_not_arrive(config, tmp_path):
+    spoon = Spoon("stream")
+    log_file = tmp_path / "hotkey.log"
+    spoon.lua.globals().spoon.logFile = str(log_file)
+    check_whole_field(spoon, PASTE_LOSES_LAST=True)  # "Wait until noon, please" without its "."
+    log = log_file.read_text()
+    assert "after pasting: the text box has 23 of the fix's 24 bytes, up to “.”" in log
+    assert "noon" not in log
 
 
 def test_apps_that_dont_describe_their_text_box_get_select_all_and_copy(config):

@@ -9,7 +9,7 @@ local obj = {}
 obj.__index = obj
 
 obj.name = "Penwise"
-obj.version = "0.6.0"
+obj.version = "0.6.1"
 obj.author = "LuckyLetter"
 obj.homepage = "https://github.com/LuckyLetter/penwise"
 obj.license = "Apache-2.0 - https://opensource.org/licenses/Apache-2.0"
@@ -268,7 +268,7 @@ function obj:_menuItems()
     { title = "Your recurring fixes…", fn = function() self:showInsights() end },
     { title = "Try it on a practice note", fn = function() self:_runQuietly("try") end },
     { title = "Settings…", fn = function() self:showSettings() end },
-    { title = "Check my setup…", fn = function() self:_openInTerminal("doctor") end },
+    { title = "Check my setup…", fn = function() self:checkSetup() end },
   }) do
     table.insert(items, item)
   end
@@ -289,17 +289,29 @@ function obj:showSettings()
   self:_showView("Settings", "settings", { "settings" })
 end
 
--- Show the panel in the middle of the screen with what `penwise <command>` prints (JSON) as a
--- view of the given type. It stays open when you switch apps (to copy an API key, say).
-function obj:_showView(title, view, command)
+--- Penwise:checkSetup()
+--- Method
+--- Checks each part of Penwise (settings, model, hotkey) and shows what it found in the panel.
+function obj:checkSetup()
+  self:_showView("Check my setup", "note", { "doctor" }, "Checking each part…")
+end
+
+-- Show the panel in the middle of the screen with what `penwise <command>` prints: JSON for a
+-- view of the given type, or plain text for a "note". It stays open when you switch apps (to
+-- copy an API key, say).
+function obj:_showView(title, view, command, waiting)
   self.target = hs.window.focusedWindow()
   self.app = hs.application.frontmostApplication() -- to go back to when you close it
   self.fullScreen = self.target ~= nil and self.target:isFullScreen() == true
   self.anchors = nil
   self:_showPanel()
   self.keepOpen = true
-  self:_send(hs.json.encode({ type = "note", title = title, text = "Loading…" }))
+  self:_send(hs.json.encode({ type = "note", title = title, text = waiting or "Loading…" }))
   self.viewTask = hs.task.new(self.bin, function(_, stdout, stderr)
+    if view == "note" then
+      local text = ((stdout or "") .. (stderr or "")):gsub("%s+$", "")
+      return self:_send(hs.json.encode({ type = "note", title = title, text = text }))
+    end
     local ok, data = pcall(hs.json.decode, stdout or "")
     if ok and type(data) == "table" then
       data.type = view
@@ -955,8 +967,7 @@ function obj:_onMessage(body)
     self.keepTask = hs.task.new(self.bin, nil, concat(self.args, { "keep", "--", body.word }))
     self.keepTask:start()
   elseif body.action == "doctor" then
-    self:_close()
-    self:_openInTerminal("doctor")
+    self:checkSetup()
   elseif body.action == "settings" then
     self:showSettings()
   elseif body.action == "save-settings" then
@@ -996,11 +1007,35 @@ function obj:_replace(text, changes)
   end
 end
 
+-- After pasting, read the text box again and say in the hotkey log whether the whole fix is
+-- there: how much of it is, and the punctuation mark that went missing, never your words.
+local function checkPasted(self, text)
+  local element = (self.source or {}).element
+  if not element then return end
+  local ok, value = pcall(function() return element:attributeValue("AXValue") end)
+  if not ok or type(value) ~= "string" or #value > 200000 then
+    return self:_log("after pasting: couldn't read the text box again")
+  end
+  if value:find(text, 1, true) then return self:_log("after pasting: the text box has the fix") end
+  -- The longest start of the fix that is in the box (if a start is there, so is any shorter one).
+  local found, missing = 0, #text
+  while found < missing do
+    local middle = math.floor((found + missing + 1) / 2)
+    if value:find(text:sub(1, middle), 1, true) then found = middle else missing = middle - 1 end
+  end
+  local after = text:sub(found + 1, found + 1)
+  self:_log("after pasting: the text box has %d of the fix's %d bytes%s", found, #text,
+    after:match("^%p$") and string.format(", up to “%s”", after) or "")
+end
+
 local function paste(text, self)
   local saved = hs.pasteboard.readAllData()
   hs.pasteboard.setContents(text)
   hs.eventtap.keyStroke({ "cmd" }, "v", 0)
-  self.restoreTimer = hs.timer.doAfter(1, function() restoreClipboard(saved) end)
+  self.restoreTimer = hs.timer.doAfter(1, function()
+    checkPasted(self, text)
+    restoreClipboard(saved)
+  end)
 end
 
 -- Select the text that was checked, make sure it is selected, then paste the fix over it.

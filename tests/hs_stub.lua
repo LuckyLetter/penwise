@@ -183,6 +183,12 @@ hs = {
         SELECTED_ALL = true
       elseif cmd and key == "a" and not FIELD.IGNORES_SELECT_ALL then
         if FIELD.SELECTION_LAG then FIELD.PENDING_SELECTION = FIELD.AXValue else FIELD.AXSelectedText = FIELD.AXValue end
+      elseif cmd and key == "v" and FIELD.AXValue and FIELD.AXSelectedText and FIELD.AXSelectedText ~= "" then
+        -- The paste replaces the selection; PASTE_LOSES_LAST: an app that drops the last character.
+        local pasted = FIELD.PASTE_LOSES_LAST and CLIPBOARD:sub(1, -2) or CLIPBOARD
+        local first, last = FIELD.AXValue:find(FIELD.AXSelectedText, 1, true)
+        if first then FIELD.AXValue = FIELD.AXValue:sub(1, first - 1) .. pasted .. FIELD.AXValue:sub(last + 1) end
+        FIELD.AXSelectedText = ""
       end
     end,
     -- A click in a text box gives it the keyboard back.
