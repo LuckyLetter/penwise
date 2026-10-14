@@ -9,7 +9,7 @@ local obj = {}
 obj.__index = obj
 
 obj.name = "Penwise"
-obj.version = "0.7.6"
+obj.version = "0.7.7"
 obj.author = "LuckyLetter"
 obj.homepage = "https://github.com/LuckyLetter/penwise"
 obj.license = "Apache-2.0 - https://opensource.org/licenses/Apache-2.0"
@@ -306,7 +306,7 @@ function obj:_menuItems()
     action("Quick fix", "quick", function() self:quickFix() end),
     { title = "-" },
     { title = "Your recurring fixes…", fn = function() self:showInsights() end },
-    { title = "Try it on a practice note", fn = function() self:_runQuietly("try") end },
+    { title = "Try it on a practice note", fn = function() self:_tryIt() end },
     { title = "Settings…", fn = function() self:showSettings() end },
     { title = "Check my setup…", fn = function() self:checkSetup() end },
     { title = "-" },
@@ -473,9 +473,15 @@ function obj:_updateInPlace()
 end
 
 -- Run a penwise command that needs no answer and shows nothing.
-function obj:_runQuietly(subcommand)
-  self.quietTask = hs.task.new(self.bin, nil, concat(self.args, { subcommand }))
+function obj:_runQuietly(subcommand, extra)
+  self.quietTask = hs.task.new(self.bin, nil, concat(self.args, concat({ subcommand }, extra or {})))
   self.quietTask:start()
+end
+
+-- The practice note, naming the hotkey as it is now (another letter may have been chosen).
+function obj:_tryIt()
+  local label = hotkeyLabel((self.hotkeys or {}).fix)
+  self:_runQuietly("try", label ~= "" and { "--hotkey", label } or {})
 end
 
 -- Open Terminal and run a penwise command there (for the interactive ones).
@@ -531,7 +537,9 @@ function obj:quickFix()
         for _, change in ipairs(event.changes) do
           if change.risk then held = held + 1 else table.insert(applied, change) end
         end
-        local note = held > 0 and string.format("  · %d left for you to review (⌃⌥P)", held) or ""
+        local label = hotkeyLabel((self.hotkeys or {}).fix)
+        local review = label ~= "" and " (" .. label .. ")" or ""
+        local note = held > 0 and string.format("  · %d left for you to review%s", held, review) or ""
         if #applied == 0 then
           hs.alert.show("Penwise: looks good, nothing to fix" .. note, 3)
         elseif self.source.kind == "readonly" then
@@ -1114,7 +1122,7 @@ function obj:_onMessage(body)
     self:_uninstall(body.hammerspoon == true)
   elseif body.action == "try" then
     self:_close()
-    self:_runQuietly("try")
+    self:_tryIt()
   elseif body.action == "open-url" then
     hs.urlevent.openURL(body.url)
   elseif body.action == "cancel" then

@@ -222,11 +222,12 @@ Click a change to undo it, and press Return to put the fixed text here.
 """
 
 
-def open_practice_note(directory: Path) -> Path:
-    """Write the practice note to `directory` and open it in TextEdit."""
+def open_practice_note(directory: Path, hotkey: str = "") -> Path:
+    """Write the practice note to `directory` and open it in TextEdit. `hotkey`: the one you chose (⌃⌥E)."""
     path = directory / "Try Penwise.txt"
     path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(PRACTICE_NOTE, encoding="utf-8")
+    note = PRACTICE_NOTE.replace("Control+Option+P", hotkey) if hotkey else PRACTICE_NOTE
+    path.write_text(note, encoding="utf-8")
     subprocess.run(["open", "-e", str(path)], capture_output=True)
     return path
 

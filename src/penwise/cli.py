@@ -119,6 +119,7 @@ def build_parser() -> argparse.ArgumentParser:
     p.set_defaults(run=cmd_settings)
 
     p = sub.add_parser("try", help="open a practice note to try the hotkey on (macOS)")
+    p.add_argument("--hotkey", default="", help="the hotkey to name in it, if not ⌃⌥P (e.g. ⌃⌥E)")
     p.set_defaults(run=cmd_try)
 
     p = sub.add_parser("uninstall", help="remove Penwise: the hotkey, your settings and history, and Penwise itself")
@@ -360,8 +361,8 @@ def cmd_try(args: argparse.Namespace) -> int:
     if platform.system() != "Darwin":
         print('The practice note is for the Mac hotkey. Here, try: penwise check "This sentence have a error."')
         return 0
-    path = setup_mac.open_practice_note(config.config_path().parent)
-    print(f"Opened {path} in TextEdit. Click in it and press Control+Option+P.")
+    path = setup_mac.open_practice_note(config.config_path().parent, args.hotkey)
+    print(f"Opened {path} in TextEdit. Click in it and press {args.hotkey or 'Control+Option+P'}.")
     return 0
 
 

@@ -335,10 +335,12 @@ def test_check_my_setup_shows_each_part_in_the_panel(config):
 def test_quick_fix_leaves_risky_changes_for_review(config):
     spoon = Spoon("stream")
     spoon.lua.globals().FIELD = spoon.to_lua({"AXRole": "AXTextArea", "AXSelectedText": "Wait untill noon [3]."})
-    spoon.run("spoon:quickFix()")
+    spoon.run('SETTINGS_STORE = { ["penwise.hotkeyLetter"] = "e" }')  # another letter chosen in the settings
+    spoon.run('spoon:bindHotkeys({ fix = { { "ctrl", "alt" }, "p" } }); spoon:quickFix()')
     spoon.run_tasks()
     assert "cmd+v: Wait until noon [3]." in spoon.log
-    assert "alert Penwise: 1 fix: Spelling  (⌘Z to undo)  · 1 left for you to review (⌃⌥P)" in spoon.log
+    # The hotkey to review the rest is named as it is now.
+    assert "alert Penwise: 1 fix: Spelling  (⌘Z to undo)  · 1 left for you to review (⌃⌥E)" in spoon.log
     spoon.run_tasks()
     assert len((config / "history.jsonl").read_text().splitlines()) == 1  # only the applied fix
 
@@ -1008,7 +1010,7 @@ def test_settings_know_your_hotkey_and_open_the_practice_note(config):
     spoon.message({"action": "try"})
     spoon.run_tasks()
     assert not spoon.lua.globals().PANEL.visible
-    assert "ran -m penwise try" in spoon.log
+    assert "ran -m penwise try --hotkey ⌃⌥E" in spoon.log  # the note names the hotkey you chose
 
 
 def test_the_shortcut_letter_chosen_in_the_settings_is_used_and_kept(config):

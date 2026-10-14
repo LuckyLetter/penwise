@@ -97,6 +97,9 @@ def test_the_practice_note_opens_in_textedit(tmp_path, monkeypatch):
     assert "[[?]]" in note and "[3]" in note
     assert len(note) <= 2000  # short enough to be checked whole, without selecting
 
+    setup_mac.open_practice_note(tmp_path, "⌃⌥E")  # another letter chosen
+    assert "press ⌃⌥E." in path.read_text(encoding="utf-8")
+
 
 def test_hotkey_log_shows_the_last_lines(tmp_path, monkeypatch):
     log = tmp_path / "penwise-hotkey.log"
