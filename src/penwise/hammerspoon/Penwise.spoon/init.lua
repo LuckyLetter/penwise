@@ -9,7 +9,7 @@ local obj = {}
 obj.__index = obj
 
 obj.name = "Penwise"
-obj.version = "0.5.1"
+obj.version = "0.6.0"
 obj.author = "LuckyLetter"
 obj.homepage = "https://github.com/LuckyLetter/penwise"
 obj.license = "Apache-2.0 - https://opensource.org/licenses/Apache-2.0"
@@ -179,10 +179,18 @@ function obj:start()
   -- Penwise should work after a restart, and it can't read or paste text without Accessibility:
   -- start Hammerspoon at login, and let macOS ask for the permission now rather than at the hotkey.
   hs.autoLaunch(true)
-  hs.accessibilityState(true)
+  local allowed = hs.accessibilityState(true)
   if self.background then
     hs.menuIcon(false)
     hs.dockIcon(false)
+    -- Hammerspoon opens its own preferences until it has the permission; Penwise's window asks.
+    if not allowed and hs.closePreferences then hs.timer.doAfter(0.2, function() hs.closePreferences() end) end
+  end
+  -- When you turn the permission on, the settings window says so.
+  local yours = hs.accessibilityStateCallback
+  hs.accessibilityStateCallback = function(...)
+    if yours then yours(...) end
+    if self.webview then self:_send(hs.json.encode({ type = "access", allowed = hs.accessibilityState() })) end
   end
   if self.showMenu and not self.menu then
     self.menu = hs.menubar.new()
@@ -295,6 +303,7 @@ function obj:_showView(title, view, command)
     local ok, data = pcall(hs.json.decode, stdout or "")
     if ok and type(data) == "table" then
       data.type = view
+      if view == "settings" then data.access = hs.accessibilityState() end
       self:_send(hs.json.encode(data))
     else
       self:_send(hs.json.encode({ type = "note", title = title, text = stderr or "" }))

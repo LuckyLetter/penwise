@@ -92,7 +92,7 @@ class ChatClient:
             headers["Authorization"] = f"Bearer {self.api_key}"
         request = urllib.request.Request(url, json.dumps(body).encode("utf-8"), headers, method="POST")
         try:
-            with urllib.request.urlopen(request, timeout=self.timeout, context=_ssl_context()) as response:
+            with urllib.request.urlopen(request, timeout=self.timeout, context=ssl_context()) as response:
                 return json.loads(response.read().decode("utf-8"))
         except urllib.error.HTTPError as exc:
             raise LLMError(self._http_error_message(exc), status=exc.code) from exc
@@ -139,7 +139,7 @@ class ChatClient:
         return f"The server answered with an error ({exc.code}). {detail}".strip()
 
 
-def _ssl_context() -> ssl.SSLContext:
+def ssl_context() -> ssl.SSLContext:
     # Python on macOS does not always find the system certificates, so add certifi's bundle too.
     context = ssl.create_default_context()
     try:

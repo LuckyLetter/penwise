@@ -876,6 +876,21 @@ def test_the_first_time_the_settings_open_by_themselves(isolated):
     assert spoon.events[-1]["type"] == "settings" and spoon.events[-1]["configured"] is False
 
 
+def test_the_settings_ask_for_accessibility_and_see_it_turned_on(isolated):
+    spoon = Spoon("stream")
+    spoon.lua.globals().ACCESSIBILITY = False  # just installed
+    spoon.run("spoon.background = true; spoon:start()")
+    assert "close hammerspoon preferences" in spoon.log  # Penwise's window asks, not Hammerspoon's
+    spoon.run_tasks()
+    spoon.message({"action": "ready"})
+    spoon.run_tasks()
+    assert spoon.events[-1]["type"] == "settings" and spoon.events[-1]["access"] is False
+
+    spoon.lua.globals().ACCESSIBILITY = True  # turned on in System Settings
+    spoon.run("hs.accessibilityStateCallback()")
+    assert spoon.events[-1] == {"type": "access", "allowed": True}
+
+
 def test_settings_are_saved_and_tested_without_the_key_on_the_command_line(isolated, server, monkeypatch):
     monkeypatch.setattr("penwise.keychain.available", lambda: False)  # no Keychain in tests
     spoon = Spoon("stream")

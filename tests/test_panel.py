@@ -310,6 +310,16 @@ def test_settings_offer_two_choices_on_this_mac_or_an_api(page):
     choices = page.get_by_role("group", name="Where the model runs").get_by_role("button")
     assert choices.all_inner_texts() == ["On this Mac", "API"]
     assert page.locator("#primary").inner_text().startswith("Save")
+    assert page.locator("#access").count() == 0  # no event says it's off: nothing to ask
+
+
+def test_settings_ask_for_accessibility_until_it_is_on(page):
+    send(page, {**SETTINGS, "access": False})
+    assert "Allow Penwise to read and replace text" in page.locator("#access").inner_text()
+    page.get_by_role("button", name="Open System Settings").click()
+    assert sent(page)[-1]["url"].endswith("Privacy_Accessibility")
+    send(page, {"type": "access", "allowed": True})
+    assert page.locator("#access").inner_text() == "✓ Penwise can read and replace text."
 
 
 def test_settings_set_up_an_api_and_test_it(page):

@@ -1,4 +1,9 @@
-from penwise import setup_mac
+import subprocess
+from pathlib import Path
+
+import pytest
+
+from penwise import cli, setup_mac
 
 
 def test_spoon_ships_with_the_package():
@@ -104,9 +109,109 @@ def test_hotkey_log_shows_the_last_lines(tmp_path, monkeypatch):
 def test_the_installer_sets_up_the_hotkey_without_questions(tmp_path, monkeypatch):
     restarted = []
     monkeypatch.setattr(setup_mac, "hammerspoon_dir", lambda: tmp_path)
+    monkeypatch.setattr(setup_mac, "hammerspoon_installed", lambda: True)
     monkeypatch.setattr(setup_mac, "restart_hammerspoon", lambda: restarted.append(True))
     setup_mac.install_quietly()
     init = (tmp_path / "init.lua").read_text()
     assert "spoon.Penwise.background = true" in init and init.index("background") < init.index(":start()")
     assert (tmp_path / "Spoons" / "Penwise.spoon" / "init.lua").exists()
     assert restarted == [True]
+
+
+def test_the_installer_leaves_your_own_hammerspoon_in_sight(tmp_path, monkeypatch):
+    monkeypatch.setattr(setup_mac, "hammerspoon_dir", lambda: tmp_path)
+    monkeypatch.setattr(setup_mac, "hammerspoon_installed", lambda: True)
+    monkeypatch.setattr(setup_mac, "restart_hammerspoon", lambda: None)
+    (tmp_path / "init.lua").write_text("hs.hotkey.bind({'cmd'}, 'h', hs.reload)\n")
+    setup_mac.install_quietly()
+    text = (tmp_path / "init.lua").read_text()
+    assert "spoon.Penwise:start()" in text and "background" not in text
+
+
+def test_hammerspoon_restarts_from_where_it_is(tmp_path, monkeypatch):
+    commands, running = [], [True, True, False]  # quits a moment after it's asked to
+
+    def run(command, **kwargs):
+        commands.append(command)
+        exited = command[0] == "pgrep" and not running.pop(0)
+        return setup_mac.subprocess.CompletedProcess(command, 1 if exited else 0)
+
+    app = tmp_path / "Hammerspoon.app"
+    app.mkdir()
+    monkeypatch.setattr(setup_mac, "APP_PATHS", (tmp_path / "missing.app", app))
+    monkeypatch.setattr(setup_mac.subprocess, "run", run)
+    monkeypatch.setattr(setup_mac.time, "sleep", lambda seconds: None)
+    setup_mac.restart_hammerspoon()
+    assert [c[0] for c in commands] == ["pgrep", "osascript", "pgrep", "pgrep", "open"]
+    assert commands[-1] == ["open", str(app)]  # just downloaded: macOS may not know it by name yet
+
+
+FEED = """<?xml version="1.0" encoding="utf-8"?>
+<rss version="2.0" xmlns:sparkle="http://www.andymatuschak.org/xml-namespaces/sparkle"><channel>
+  <item><title>Version 1.1.1</title>
+    <enclosure url="https://github.com/Hammerspoon/hammerspoon/releases/download/1.1.1/Hammerspoon-1.1.1.zip"/>
+    <sparkle:minimumSystemVersion>13.0</sparkle:minimumSystemVersion></item>
+  <item><title>Version 1.0.0</title>
+    <enclosure url="https://github.com/Hammerspoon/hammerspoon/releases/download/1.0.0/Hammerspoon-1.0.0.zip"/>
+    <sparkle:minimumSystemVersion>11.0</sparkle:minimumSystemVersion></item>
+</channel></rss>"""
+
+
+def test_the_newest_hammerspoon_that_runs_on_this_mac():
+    assert setup_mac.hammerspoon_download(FEED, "15.3.1").endswith("/1.1.1/Hammerspoon-1.1.1.zip")
+    assert setup_mac.hammerspoon_download(FEED, "12.7").endswith("/1.0.0/Hammerspoon-1.0.0.zip")
+    assert setup_mac.hammerspoon_download(FEED, "10.15") is None
+
+
+def fake_mac(tmp_path, monkeypatch, *, signed=True):
+    """An /Applications you can't install to; downloads and unpacking that only pretend."""
+    commands = []
+    system, home = tmp_path / "Applications", tmp_path / "home"  # no /Applications at all here
+    monkeypatch.setattr(setup_mac, "APP_PATHS", (system / "Hammerspoon.app", home / "Hammerspoon.app"))
+    feeds = {setup_mac.HAMMERSPOON_FEED: FEED.encode()}
+    monkeypatch.setattr(setup_mac, "_download", lambda url: feeds.get(url, b"zip"))
+    monkeypatch.setattr(setup_mac.platform, "mac_ver", lambda: ("15.3", "", ""))
+
+    def run(command, **kwargs):
+        commands.append(command)
+        if command[0] == "ditto":
+            (Path(command[-1]) / "Hammerspoon.app" / "Contents").mkdir(parents=True)
+        return subprocess.CompletedProcess(command, 0 if signed or command[0] != "codesign" else 1)
+
+    monkeypatch.setattr(setup_mac.subprocess, "run", run)
+    return commands
+
+
+def test_hammerspoon_is_downloaded_where_you_can_install_apps(tmp_path, monkeypatch):
+    commands = fake_mac(tmp_path, monkeypatch)
+    app = setup_mac.install_hammerspoon()
+    assert app == tmp_path / "home" / "Hammerspoon.app" and app.exists()
+    assert [c[0] for c in commands] == ["ditto", "codesign"]
+
+
+def test_a_damaged_hammerspoon_download_is_removed(tmp_path, monkeypatch):
+    fake_mac(tmp_path, monkeypatch, signed=False)
+    with pytest.raises(setup_mac.SetupError, match="damaged"):
+        setup_mac.install_hammerspoon()
+    assert not (tmp_path / "home" / "Hammerspoon.app").exists()
+
+
+def test_a_page_that_isnt_the_feed_means_no_connection(tmp_path, monkeypatch):
+    fake_mac(tmp_path, monkeypatch)
+    monkeypatch.setattr(setup_mac, "_download", lambda url: b"<html>Log in to the Wi-Fi")
+    with pytest.raises(setup_mac.SetupError, match="internet connection"):
+        setup_mac.install_hammerspoon()
+
+
+def test_the_installer_gets_hammerspoon_when_it_is_missing(tmp_path, monkeypatch, capsys):
+    monkeypatch.setattr(setup_mac, "hammerspoon_dir", lambda: tmp_path / ".hammerspoon")
+    monkeypatch.setattr(setup_mac, "restart_hammerspoon", lambda: None)
+
+    def offline(url):
+        raise setup_mac.SetupError("Couldn't download Hammerspoon.")
+
+    monkeypatch.setattr(setup_mac, "_download", offline)
+    monkeypatch.setattr(setup_mac, "hammerspoon_installed", lambda: False)
+    monkeypatch.setattr(cli.platform, "system", lambda: "Darwin")
+    assert cli.main(["setup-mac", "--background"]) == 1
+    assert capsys.readouterr().err.strip() == "Couldn't download Hammerspoon."

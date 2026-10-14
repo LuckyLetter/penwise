@@ -2,12 +2,20 @@
 
 from __future__ import annotations
 
+import os
+import platform
 import re
 import shutil
 import subprocess
 import sys
+import tempfile
 import time
+import urllib.error
+import urllib.request
 from pathlib import Path
+from xml.etree import ElementTree
+
+from penwise.llm import ssl_context
 
 SPOON_NAME = "Penwise.spoon"
 BEGIN = "-- >>> Penwise"
@@ -16,6 +24,14 @@ APP_PATHS = (Path("/Applications/Hammerspoon.app"), Path.home() / "Applications"
 # What the hotkey did, step by step (never your text); written by the Spoon (Penwise.logFile).
 HOTKEY_LOG = Path.home() / "Library" / "Logs" / "penwise-hotkey.log"
 ACCESSIBILITY_SETTINGS = "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility"
+# Hammerspoon's own update feed: each version, its download and the macOS it needs, newest first.
+HAMMERSPOON_FEED = "https://raw.githubusercontent.com/Hammerspoon/hammerspoon/master/appcast.xml"
+_SPARKLE = "{http://www.andymatuschak.org/xml-namespaces/sparkle}"
+
+
+class SetupError(Exception):
+    """Something the hotkey needs could not be set up; the message says what."""
+
 
 SNIPPET = """{begin} (added by `penwise setup`; you can change the hotkeys below)
 hs.loadSpoon("Penwise")
@@ -103,10 +119,61 @@ def write_snippet(init_file: Path, background: bool = False) -> str:
     return status
 
 
+def _version(text: str) -> tuple[int, ...]:
+    return tuple(int(part) for part in re.findall(r"\d+", text))
+
+
+def hammerspoon_download(feed: str, macos: str) -> str | None:
+    """The download of the newest Hammerspoon in its feed that runs on this version of macOS."""
+    for item in ElementTree.fromstring(feed).iter("item"):
+        enclosure = item.find("enclosure")
+        needs = item.findtext(f"{_SPARKLE}minimumSystemVersion") or "0"
+        if enclosure is not None and enclosure.get("url") and _version(needs) <= _version(macos):
+            return enclosure.get("url")
+    return None
+
+
+def _download(url: str) -> bytes:
+    try:
+        with urllib.request.urlopen(url, timeout=60, context=ssl_context()) as response:
+            return response.read()
+    except (urllib.error.URLError, OSError) as exc:
+        raise SetupError("Couldn't download Hammerspoon. Check your internet connection.") from exc
+
+
+def install_hammerspoon() -> Path:
+    """Download Hammerspoon from its releases on GitHub into /Applications (or ~/Applications)."""
+    try:
+        url = hammerspoon_download(_download(HAMMERSPOON_FEED).decode("utf-8"), platform.mac_ver()[0])
+    except (ElementTree.ParseError, UnicodeDecodeError) as exc:  # say, a Wi-Fi login page
+        raise SetupError("Couldn't download Hammerspoon. Check your internet connection.") from exc
+    if not url:
+        raise SetupError("Hammerspoon needs a newer version of macOS.")
+    folder = APP_PATHS[0].parent if os.access(APP_PATHS[0].parent, os.W_OK) else APP_PATHS[1].parent
+    folder.mkdir(parents=True, exist_ok=True)
+    app = folder / "Hammerspoon.app"
+    with tempfile.TemporaryDirectory() as temp:
+        archive = Path(temp) / "Hammerspoon.zip"
+        archive.write_bytes(_download(url))
+        # ditto, unlike unzip, keeps the app's links and signature intact.
+        unpacked = subprocess.run(["ditto", "-x", "-k", str(archive), str(folder)], capture_output=True)
+    if unpacked.returncode != 0 or subprocess.run(["codesign", "--verify", str(app)], capture_output=True).returncode:
+        shutil.rmtree(app, ignore_errors=True)
+        raise SetupError("The Hammerspoon download was damaged. Please try again.")
+    return app
+
+
 def install_quietly() -> None:
-    """Install the hotkey without asking anything, Hammerspoon out of sight (for the installer)."""
+    """Install Hammerspoon if needed, and the hotkey, without asking anything (for the installer).
+
+    When Hammerspoon is there only for Penwise (no config of its own yet), it stays out of sight.
+    """
+    if not hammerspoon_installed():
+        install_hammerspoon()
     install_spoon()
-    write_snippet(hammerspoon_dir() / "init.lua", background=True)
+    init_file = hammerspoon_dir() / "init.lua"
+    only_penwise = not init_file.exists() or not init_file.read_text(encoding="utf-8").strip()
+    write_snippet(init_file, background=only_penwise)
     restart_hammerspoon()
 
 
@@ -120,11 +187,21 @@ def refresh() -> bool:
     return True
 
 
+def _hammerspoon_running() -> bool:
+    return subprocess.run(["pgrep", "-x", "Hammerspoon"], capture_output=True).returncode == 0
+
+
 def restart_hammerspoon() -> None:
     """Quit and reopen Hammerspoon so it loads the new config."""
-    subprocess.run(["osascript", "-e", 'quit app "Hammerspoon"'], capture_output=True)
-    time.sleep(1)
-    subprocess.run(["open", "-a", "Hammerspoon"], capture_output=True)
+    if _hammerspoon_running():
+        subprocess.run(["osascript", "-e", 'quit app id "org.hammerspoon.Hammerspoon"'], capture_output=True)
+        for _ in range(50):  # opening it while it quits would only bring the old one forward
+            if not _hammerspoon_running():
+                break
+            time.sleep(0.1)
+    # By its path: macOS may not know yet about a Hammerspoon the installer just downloaded.
+    app = next((path for path in APP_PATHS if path.exists()), None)
+    subprocess.run(["open", str(app)] if app else ["open", "-a", "Hammerspoon"], capture_output=True)
 
 
 def open_accessibility_settings() -> None:

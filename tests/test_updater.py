@@ -19,6 +19,10 @@ class FakeDistribution:
     [
         ({"url": "file:///Users/me/penwise", "dir_info": {}}, ("directory", "/Users/me/penwise")),
         (
+            {"url": "file:///Users/me/Install%20Penwise.app/penwise-1.0-py3-none-any.whl", "archive_info": {}},
+            ("file", "/Users/me/Install Penwise.app/penwise-1.0-py3-none-any.whl"),
+        ),
+        (
             {"url": "https://github.com/LuckyLetter/penwise", "vcs_info": {"vcs": "git"}},
             ("git", "https://github.com/LuckyLetter/penwise"),
         ),
@@ -62,6 +66,13 @@ def test_update_from_git(commands, monkeypatch):
     monkeypatch.setattr(updater, "install_source", lambda: ("git", "https://github.com/LuckyLetter/penwise"))
     assert updater.run() == 0
     assert commands[0] == ["uv", "tool", "upgrade", "penwise"]
+
+
+def test_installed_with_the_installer_it_says_to_download_the_new_one(monkeypatch, capsys):
+    monkeypatch.setattr(updater, "install_source", lambda: ("file", "/Users/me/Downloads/penwise-1.0.whl"))
+    assert updater.run() == 1
+    assert "download the newest Install Penwise" in capsys.readouterr().out
+    assert updater.check() is None  # and it doesn't look for a newer git commit
 
 
 def test_without_uv_it_says_how_to_update(monkeypatch, capsys):

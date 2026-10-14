@@ -409,6 +409,7 @@ function renderInsights(data) {
 // Save tests them at once.
 const OTHER_MODEL = "other";
 const LOCAL = "ollama";
+const ACCESSIBILITY_SETTINGS = "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility";
 
 // A service Penwise knows (OpenRouter), from the API address you typed: for its key page and models.
 function knownService() {
@@ -466,6 +467,14 @@ function renderSettings() {
     el("div", { class: "title" }, state.settings.configured ? "Settings" : "Welcome to Penwise"),
     !state.settings.configured &&
       el("div", { class: "muted" }, "Choose the AI model Penwise uses. You can change it any time from the ✎ menu."),
+    // Without Accessibility, Penwise can't read the text box or put the fix in it.
+    state.settings.access === false && el("div", { class: "banner", id: "access" },
+      el("strong", {}, "Allow Penwise to read and replace text"),
+      el("div", {}, "In Privacy & Security → Accessibility, turn on Hammerspoon: it runs Penwise. ",
+        el("button", { type: "button", class: "link", onclick: () => post({ action: "open-url", url: ACCESSIBILITY_SETTINGS }) },
+          "Open System Settings")),
+    ),
+    state.settings.access === "now" && el("div", { class: "good", id: "access" }, "✓ Penwise can read and replace text."),
     el("label", {}, "Where the model runs"),
     el("div", { class: "modes", role: "group", "aria-label": "Where the model runs" },
       el("button", { type: "button", "aria-pressed": String(local), onclick: () => chooseWhere(LOCAL) }, "On this Mac"),
@@ -726,6 +735,9 @@ window.penwise = {
         break;
       case "pasted":
         state.form.key = event.text.trim();
+        break;
+      case "access":
+        if (state.settings) state.settings.access = event.allowed ? (state.settings.access === false ? "now" : true) : false;
         break;
     }
     render();

@@ -78,10 +78,14 @@ def setup_hotkey() -> bool:
     fresh = False
     if not setup_mac.hammerspoon_installed():
         print("\nThe hotkey uses Hammerspoon, a free, open-source app that adds hotkeys to macOS.")
-        if not (shutil.which("brew") and confirm("Install Hammerspoon with Homebrew now?")):
+        if not confirm("Download and install Hammerspoon now?"):
             print("Install it from https://www.hammerspoon.org, then run `penwise setup` again.")
             return False
-        if not _run(["brew", "install", "--cask", "hammerspoon"]):
+        print("Downloading Hammerspoon… ", end="", flush=True)
+        try:
+            print(f"✓ {setup_mac.install_hammerspoon()}")
+        except setup_mac.SetupError as exc:
+            print(f"✗\n  {exc}")
             return False
         fresh = True
 

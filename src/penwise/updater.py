@@ -15,6 +15,9 @@ from pathlib import Path
 
 from penwise import setup_mac
 
+# Where Install Penwise, the Mac installer, can be downloaded.
+DOWNLOAD_PAGE = "https://github.com/LuckyLetter/penwise/releases/latest"
+
 
 def _direct_url() -> dict:
     """The install record pip and uv keep (PEP 610), or {} if there is none."""
@@ -26,7 +29,8 @@ def _direct_url() -> dict:
 
 
 def install_source() -> tuple[str, str]:
-    """Where Penwise was installed from: ("directory", path), ("git", url) or ("other", "")."""
+    """Where Penwise was installed from: ("directory", path), ("file", path) for a wheel, as
+    Install Penwise installs it, ("git", url) or ("other", "")."""
     info = _direct_url()
     if not info:
         return "other", ""
@@ -34,7 +38,8 @@ def install_source() -> tuple[str, str]:
     if "vcs_info" in info:
         return "git", url
     if url.startswith("file://"):
-        return "directory", urllib.request.url2pathname(urllib.parse.urlparse(url).path)
+        path = urllib.request.url2pathname(urllib.parse.urlparse(url).path)
+        return ("file" if "archive_info" in info else "directory"), path
     return "other", url
 
 
@@ -73,6 +78,9 @@ def installed_with_uv() -> bool:
 
 def run() -> int:
     kind, where = install_source()
+    if kind == "file":
+        print(f"To update Penwise, download the newest Install Penwise and open it: {DOWNLOAD_PAGE}")
+        return 1
     if not installed_with_uv():
         print("Penwise wasn't installed with uv, so update it the way you installed it, for example:")
         print(f"  pip install --upgrade {where or 'penwise'}")

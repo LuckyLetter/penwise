@@ -394,8 +394,12 @@ def cmd_setup_mac(args: argparse.Namespace) -> int:
             print("✓ Hotkey updated, and Hammerspoon restarted to load it.")
         return 0
     if args.background:
-        setup_mac.install_quietly()
-        print("✓ Hotkey installed. Penwise opens its settings to choose a model.")
+        try:
+            setup_mac.install_quietly()
+        except setup_mac.SetupError as exc:
+            print(exc, file=sys.stderr)
+            return 1
+        print("✓ Hotkey installed, and Hammerspoon restarted to load it.")
         return 0
     return 0 if wizard.setup_hotkey() else 1
 

@@ -7,7 +7,7 @@ Penwise is made for research and professional writing by non-native speakers. It
 every change comes with a short note, and the fixes you make again and again show up in `penwise insights`.
 
 It works with a cloud model you have an API key for, or a small local model (such as a 1B model on an M1 Mac).
-Setup is one command that asks a few questions and does the rest.
+Setup is one download: open it, choose a model, and you're done.
 
 **What it does**
 
@@ -19,8 +19,8 @@ Setup is one command that asks a few questions and does the rest.
   `[[?]]` where you can't find the word, and Penwise writes it in English.
 - **Safe and in your control.** It never changes numbers, citations, acronyms, math, code or links on its own; you
   can undo any single change; with a local model nothing leaves your Mac.
-- **Simple to set up and keep current.** `penwise setup` asks a few questions and does the rest; the ✎ menu bar
-  icon tells you when an update is available.
+- **Simple to set up.** One download installs everything, with nothing to type; then you choose a model in the
+  window that opens.
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="docs/panel-dark.png">
@@ -62,22 +62,17 @@ Three design rules keep it trustworthy:
 
 ## Quick start (macOS)
 
-1. **Install Penwise** with [uv](https://docs.astral.sh/uv/) (`brew install uv`):
+1. **Download [Install Penwise](https://github.com/LuckyLetter/penwise/releases/latest/download/Install-Penwise.zip)
+   and open it.** It installs Penwise and [Hammerspoon](https://www.hammerspoon.org), the free app that gives
+   Penwise its shortcut, in a minute or two.
 
-   ```sh
-   uv tool install git+https://github.com/LuckyLetter/penwise
-   uv tool update-shell    # then open a new Terminal window
-   ```
+   The first time, macOS says it can't check the app, because it isn't signed by an Apple developer yet. Click
+   **Done**, open **System Settings → Privacy & Security**, scroll down, and click **Open Anyway** next to
+   *Install Penwise*.
 
-2. **Run the guided setup:**
-
-   ```sh
-   penwise setup
-   ```
-
-   It asks where the model should run, saves your API key in the macOS Keychain, lets you pick a model from a
-   short list, tests it, and installs the hotkey (it can install [Hammerspoon](https://www.hammerspoon.org) for you
-   with Homebrew). Press Return to take the suggested answer at every step.
+2. **Choose a model** in the Penwise window that opens: *On this Mac* (free and private, with
+   [Ollama](https://ollama.com)) or *API* (paste your key; it goes in the macOS Keychain). Save tests it right away.
+   When macOS asks, turn on Hammerspoon under **Accessibility**: that lets Penwise read and replace your text.
 
 3. **Use it.** Click in any text box and press **⌃⌥P** (Control+Option+P). Look over the changes, then press
    **Return** to put the fix in, or **Esc** to close. That's all you need to know.
@@ -133,10 +128,20 @@ Penwise notices these by itself (any non-Latin script, or `[[…]]`) and fills i
 appears as its own change, so you can learn the phrase, and undo it if the translation is off. Citations like
 `[12]` are left alone.
 
-**Updating:** `penwise update` gets the latest version and refreshes the hotkey. You don't need to remember to
-check: once a day Penwise looks for a new version, and when there is one the menu bar icon shows a dot (✎•)
-and its menu offers *Update Penwise*.
-If something isn't working, `penwise doctor` checks each part and says what to do.
+**Updating:** download the newest *Install Penwise* and open it; your settings and hotkeys stay as they are.
+If something isn't working, *Check my setup* in the ✎ menu checks each part and says what to do.
+
+**Prefer the Terminal?** Install with [uv](https://docs.astral.sh/uv/) and run the guided setup, which asks the same
+questions and downloads Hammerspoon if needed:
+
+```sh
+uv tool install git+https://github.com/LuckyLetter/penwise
+uv tool update-shell    # then open a new Terminal window
+penwise setup
+```
+
+Installed this way, `penwise update` gets the latest version and refreshes the hotkey. Once a day Penwise looks for
+a new version; when there is one, the menu bar icon shows a dot (✎•) and its menu offers *Update Penwise*.
 
 ## Choosing a model
 
@@ -216,7 +221,8 @@ The review panel also tells you when you've made the same fix before. History is
 - Your text is sent **only** to the `base_url` you configure. With a local model, nothing leaves your Mac.
 - Penwise stores your config, your API key in the Keychain, and (unless turned off) the accepted changes: the
   changed words and up to a few words on each side, never whole texts.
-- No telemetry, no accounts, no network calls besides the model API.
+- No telemetry, no accounts. Besides the model API, Penwise goes online only to set itself up (uv, Python and
+  Hammerspoon) and to look for updates.
 - Hammerspoon needs Accessibility permission to read the text you're checking and paste the result. Penwise
   puts your clipboard back afterwards.
 
@@ -270,6 +276,10 @@ The tests start a fake OpenAI-compatible server, so no model is needed. `tests/t
 Spoon in an embedded Lua interpreter with stubbed `hs` APIs, and `tests/test_panel.py` drives the review panel in a
 headless browser. On a macOS runner, CI also runs `tests/test_macos.py`: it stores a key in a real (temporary)
 Keychain, and drives the review panel and quick fix inside the real Hammerspoon app.
+
+**The installer:** `python installer/build.py` writes `dist/Install-Penwise.zip`: an app that runs
+`installer/install.sh` with this version of Penwise inside. To publish a version, attach that zip to a GitHub
+release; the download link above always points to the latest release.
 
 ## License
 
