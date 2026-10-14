@@ -181,3 +181,20 @@ def test_filling_in_allows_a_longer_answer_but_not_a_reply():
     original = "我们的方法很好。"
     assert engine.sanity_check(original, "Our method works very well, as the results show.", "fix", fill=True) is None
     assert engine.sanity_check(original, "Sure! Here is the translation:", "fix", fill=True) is not None
+
+
+@pytest.mark.parametrize(
+    "text, edited, pasted",
+    [
+        # The acronym stays unless you choose otherwise; the period is a fix of its own.
+        ("we compare with LLMs", "We compare with large language models.", "We compare with LLMs."),
+        ("results in table 2", "Results are in Table II.", "Results are in Table 2."),
+        ("see table 2.", "See Table II.", "See Table 2."),  # the period was there already
+    ],
+)
+def test_punctuation_is_added_even_where_a_held_back_change_ends(text, edited, pasted):
+    result = engine.check(text, fake_chat({text: edited}))
+    assert result.edited == pasted
+    assert [c.id for c in result.changes] == list(range(len(result.changes)))  # numbered in order
+    held = [c for c in result.changes if c.risk]
+    assert len(held) == 1 and not held[0].after.endswith(".")

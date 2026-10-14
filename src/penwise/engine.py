@@ -40,6 +40,7 @@ _REPLY = re.compile(
     re.IGNORECASE,
 )
 _THINK = re.compile(r"<think>.*?</think>\s*|^.*?</think>\s*", re.DOTALL)
+_END_PUNCTUATION = re.compile(r"[.,;:!?]+$")
 _QUOTES = [("```", "```"), ('"""', '"""'), ('"', '"'), ("“", "”"), ("'", "'"), ("‘", "’")]
 
 
@@ -209,6 +210,7 @@ def check(
                 "Try again, try the other mode, or use a larger model."
             )
         segments, changes = textdiff.diff(piece, edited, first_id=len(result.changes))
+        segments, changes = _split_end_punctuation(segments, changes, keep, first_id=len(result.changes))
         for seg in segments:
             _append(result.segments, seg)
         result.changes.extend(changes)
@@ -238,6 +240,35 @@ def check(
                         change.reason = reasons.get(change.id, change.reason)
                     emit({"type": "explanations", "reasons": {str(k): v for k, v in reasons.items()}})
     return result
+
+
+def _split_end_punctuation(segments: list, changes: list[Change], keep, first_id: int) -> tuple[list, list[Change]]:
+    """Give the punctuation that ends a change Penwise won't apply on its own a change of its own.
+
+    In "LLMs" → "large language models." the acronym stays unless you choose otherwise, but the
+    period is a fix by itself: split off, it is applied either way. Changes are numbered again.
+    """
+    by_id = {c.id: c for c in changes}
+    out_segments: list = []
+    out_changes: list[Change] = []
+    for seg in segments:
+        if isinstance(seg, str):
+            out_segments.append(seg)
+            continue
+        change = by_id[seg]
+        mark = _END_PUNCTUATION.search(change.after)
+        parts = [change]
+        if mark and not change.before.endswith(mark.group()) and protect.risk(change.before, change.after, keep):
+            contexts = {"context_before": change.context_before, "context_after": change.context_after}
+            parts = [
+                Change(id=0, before=change.before, after=change.after[: mark.start()], **contexts),
+                Change(id=0, before="", after=mark.group(), **contexts),
+            ]
+        for part in parts:
+            part.id = first_id + len(out_changes)
+            out_changes.append(part)
+            out_segments.append(part.id)
+    return out_segments, out_changes
 
 
 def _edit(chat: Chat, piece: str, mode: str, style: str = "") -> tuple[str, str | None]:

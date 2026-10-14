@@ -162,6 +162,13 @@ def test_risky_changes_start_unapplied(page):
     assert sent(page)[-1]["text"] == "Shown, it works."
 
 
+def test_the_period_after_a_held_back_change_is_still_put_in(page):
+    send(page, {"type": "begin", "original": "we compare with LLMs", "mode": "fix"})
+    send(page, check_result("we compare with LLMs", "We compare with large language models."))
+    page.keyboard.press("Enter")
+    assert sent(page)[-1]["text"] == "We compare with LLMs."  # the acronym kept, the period added
+
+
 def test_always_keep_a_word(page):
     send(page, {"type": "begin", "original": "We use Pytorch and a eror.", "mode": "fix"})
     send(page, check_result("We use Pytorch and a eror.", "We use PyTorch and an error."))
