@@ -251,7 +251,10 @@ hs = {
       return MOUSE
     end,
   },
-  urlevent = { openURL = function(url) log("open " .. url) end },
+  urlevent = {
+    openURL = function(url) log("open " .. url) end,
+    bind = function(name, fn) URL_HANDLERS = URL_HANDLERS or {}; URL_HANDLERS[name] = fn end,
+  },
   -- Hammerspoon's own store, kept across restarts.
   settings = {
     get = function(key) return (SETTINGS_STORE or {})[key] end,

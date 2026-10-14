@@ -423,7 +423,9 @@ def cmd_update(args: argparse.Namespace) -> int:
         return updater.run()
     available = updater.check()
     if args.json:
-        print(json.dumps({"available": bool(available), "detail": available or ""}))
+        # in_place: the update needs no Terminal (an installation made with Install Penwise).
+        in_place = updater.install_source()[0] == "file"
+        print(json.dumps({"available": bool(available), "detail": available or "", "in_place": in_place}))
     elif available:
         print(f"An update is available ({available}). Get it with: penwise update")
     else:

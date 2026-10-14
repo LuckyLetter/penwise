@@ -1,3 +1,4 @@
+import io
 import json
 import subprocess
 
@@ -68,11 +69,82 @@ def test_update_from_git(commands, monkeypatch):
     assert commands[0] == ["uv", "tool", "upgrade", "penwise"]
 
 
-def test_installed_with_the_installer_it_says_to_download_the_new_one(monkeypatch, capsys):
+class Response(io.BytesIO):
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *exc):
+        return False
+
+
+RELEASE = {
+    "tag_name": "v9.9.9",
+    "assets": [
+        {"name": "Install-Penwise.zip", "browser_download_url": "https://example.org/Install-Penwise.zip"},
+        {
+            "name": "penwise-9.9.9-py3-none-any.whl",
+            "browser_download_url": "https://example.org/penwise-9.9.9-py3-none-any.whl",
+        },
+    ],
+}
+
+
+def test_the_newest_release_and_its_wheel(monkeypatch):
+    monkeypatch.setattr(updater.urllib.request, "urlopen", lambda *a, **k: Response(json.dumps(RELEASE).encode()))
+    assert updater.latest_release() == ("9.9.9", "https://example.org/penwise-9.9.9-py3-none-any.whl")
+
+    def private_repository(*args, **kwargs):
+        raise updater.urllib.error.HTTPError("", 404, "Not Found", None, None)
+
+    monkeypatch.setattr(updater.urllib.request, "urlopen", private_repository)
+    assert updater.latest_release() is None  # nothing to see: no update, no error
+
+
+def test_an_installer_installation_looks_for_a_newer_release(monkeypatch):
     monkeypatch.setattr(updater, "install_source", lambda: ("file", "/Users/me/Downloads/penwise-1.0.whl"))
+    monkeypatch.setattr(updater, "latest_release", lambda: ("9.9.9", "https://example.org/penwise-9.9.9.whl"))
+    assert updater.check() == "version 9.9.9"
+    monkeypatch.setattr(updater, "latest_release", lambda: (updater.__version__, "https://example.org/w.whl"))
+    assert updater.check() is None
+
+
+def test_an_installer_installation_updates_itself_from_the_release(monkeypatch, tmp_path, capsys):
+    ran = []
+    monkeypatch.setattr(updater, "install_source", lambda: ("file", "/Users/me/Downloads/penwise-1.0.whl"))
+    monkeypatch.setattr(
+        updater, "latest_release", lambda: ("9.9.9", "https://example.org/penwise-9.9.9-py3-none-any.whl")
+    )
+    monkeypatch.setattr(updater, "_uv", lambda: "/Users/me/.local/bin/uv")
+    monkeypatch.setattr(updater.urllib.request, "urlopen", lambda *a, **k: Response(b"wheel"))
+    monkeypatch.setattr(updater, "_run", lambda command: ran.append(command) or True)
+    monkeypatch.setattr(updater, "_refresh_hotkey", lambda: ran.append("refresh"))
+
+    class Answer:
+        def __init__(self, stdout):
+            self.stdout = stdout
+
+    def uv_says(command, **kwargs):
+        if command[1:] == ["tool", "dir", "--bin"]:
+            return Answer("/Users/me/.local/bin\n")
+        return Answer("      --managed-python  Require use of uv-managed Python versions")
+
+    monkeypatch.setattr(updater.subprocess, "run", uv_says)
+    monkeypatch.setenv("PATH", "/usr/bin:/bin")  # Hammerspoon's
+    assert updater.run() == 0
+    install, refresh = ran
+    uv = "/Users/me/.local/bin/uv"
+    assert install[:7] == [uv, "tool", "install", "--force", "--reinstall", "--managed-python", "--python"]
+    assert install[-1].endswith("penwise-9.9.9-py3-none-any.whl")
+    assert refresh == "refresh"
+    assert updater.os.environ["PATH"].startswith("/Users/me/.local/bin:")  # penwise found by name
+    assert "Updated: Penwise 9.9.9" in capsys.readouterr().out
+
+
+def test_without_a_release_to_see_it_says_where_to_download(monkeypatch, capsys):
+    monkeypatch.setattr(updater, "install_source", lambda: ("file", "/Users/me/Downloads/penwise-1.0.whl"))
+    monkeypatch.setattr(updater, "latest_release", lambda: None)
     assert updater.run() == 1
-    assert "download the newest Install Penwise" in capsys.readouterr().out
-    assert updater.check() is None  # and it doesn't look for a newer git commit
+    assert "Download the newest Install Penwise" in capsys.readouterr().out
 
 
 def test_without_uv_it_says_how_to_update(monkeypatch, capsys):

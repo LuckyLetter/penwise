@@ -7,6 +7,7 @@ import json
 import os
 import subprocess
 import sys
+import time
 from pathlib import Path
 
 import pytest
@@ -1071,3 +1072,41 @@ def test_uninstall_from_the_menu_removes_penwise_and_gives_hammerspoon_back(conf
     log = spoon.log
     assert "hammerspoon starts at login: false" in log and log.count("hammerspoon menu icon: true") == 1
     assert "alert Penwise is uninstalled." in log and log[-1] == "reload hammerspoon config"
+
+
+def test_an_update_needs_no_terminal_for_an_installer_installation(config, tmp_path, monkeypatch):
+    monkeypatch.setenv("HOME", str(tmp_path))  # the update log goes to ~/Library/Logs
+    (tmp_path / "Library" / "Logs").mkdir(parents=True)
+    fake = tmp_path / "penwise"  # stands in for penwise: an update is there, and updating is recorded
+    fake.write_text(
+        "#!/bin/sh\n"
+        'if [ "$2" = --check ]; then\n'
+        """  echo '{"available": true, "detail": "version 9.9.9", "in_place": true}'\n"""
+        'elif [ "$1" = update ]; then echo "$@" > "$(dirname "$0")/updated"; fi\n'
+    )
+    fake.chmod(0o755)
+    spoon = Spoon("stream")
+    spoon.run(f'spoon.bin = "{fake}"; spoon.args = {{}}; spoon:start()')
+    spoon.run("spoon:_checkForUpdate()")
+    spoon.run_tasks()
+    assert spoon.lua.globals().MENU_TITLE == "✎•"
+    click(spoon, "Update Penwise (version 9.9.9)")
+    spoon.run_tasks()  # in the background, apart from Hammerspoon: it restarts Hammerspoon at its end
+    for _ in range(100):
+        if (tmp_path / "updated").exists():
+            break
+        time.sleep(0.05)
+    assert (tmp_path / "updated").read_text().strip() == "update"
+    assert not any(line.startswith("applescript") for line in spoon.log)  # no Terminal
+    assert any(line.startswith("alert Updating Penwise") for line in spoon.log)
+
+
+def test_after_an_update_penwise_says_so_and_a_failed_one_too(config):
+    spoon = Spoon("stream")
+    spoon.run('SETTINGS_STORE = { ["penwise.version"] = "0.0.1" }; spoon:start()')
+    assert any(line.startswith("alert Penwise is up to date: version") for line in spoon.log)
+    spoon.run("URL_HANDLERS.penwiseUpdateFailed()")
+    assert spoon.log[-1].startswith("alert Penwise couldn't update.")
+    again = Spoon("stream")  # an ordinary start: nothing to say
+    again.run("spoon:start()")
+    assert not any("up to date" in line for line in again.log)

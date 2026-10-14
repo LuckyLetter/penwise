@@ -131,7 +131,9 @@ Penwise notices these by itself (any non-Latin script, or `[[…]]`) and fills i
 appears as its own change, so you can learn the phrase, and undo it if the translation is off. Citations like
 `[12]` are left alone.
 
-**Updating:** download the newest *Install Penwise* and open it; your settings and hotkeys stay as they are.
+**Updating:** when a new version is out, the ✎ icon shows a dot (✎•); *Update Penwise* in its menu downloads it and
+restarts Penwise, with no Terminal. Opening the newest *Install Penwise* works too; your settings and hotkeys stay as
+they are.
 If something isn't working, *Check my setup* in the ✎ menu checks each part and says what to do.
 
 **Uninstalling:** *Uninstall Penwise…* in the ✎ menu removes the hotkey, your settings, API key and history, and

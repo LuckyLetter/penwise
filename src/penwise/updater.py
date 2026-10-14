@@ -6,17 +6,42 @@ import importlib.metadata
 import json
 import os
 import platform
+import re
 import shutil
 import subprocess
 import sys
+import tempfile
 import urllib.parse
 import urllib.request
 from pathlib import Path
 
-from penwise import setup_mac
+from penwise import __version__, setup_mac
+from penwise.llm import ssl_context
 
-# Where Install Penwise, the Mac installer, can be downloaded.
+# Where Install Penwise, the Mac installer, can be downloaded; its releases also carry the wheel
+# that updates an installation made with it.
 DOWNLOAD_PAGE = "https://github.com/LuckyLetter/penwise/releases/latest"
+LATEST_RELEASE = "https://api.github.com/repos/LuckyLetter/penwise/releases/latest"
+
+
+def latest_release() -> tuple[str, str] | None:
+    """(version, wheel URL) of the newest release, or None when there's none to be seen."""
+    request = urllib.request.Request(LATEST_RELEASE, headers={"User-Agent": f"penwise/{__version__}"})
+    try:
+        with urllib.request.urlopen(request, timeout=10, context=ssl_context()) as response:
+            info = json.loads(response.read())
+    except (OSError, ValueError):
+        return None
+    version = str(info.get("tag_name", "")).lstrip("v")
+    wheels = [a.get("browser_download_url") for a in info.get("assets", []) if str(a.get("name")).endswith(".whl")]
+    return (version, wheels[0]) if version and wheels and wheels[0] else None
+
+
+def _newer(version: str, than: str) -> bool:
+    def parts(text: str) -> tuple[int, ...]:
+        return tuple(int(n) for n in re.findall(r"\d+", text))
+
+    return parts(version) > parts(than)
 
 
 def _direct_url() -> dict:
@@ -53,6 +78,10 @@ def check() -> str | None:
         count = _quiet([*git, "rev-list", "--count", "HEAD..@{u}"]) or "0"
         if count.isdigit() and int(count) > 0:
             return f"{count} new change{'s' if int(count) > 1 else ''}"
+    elif kind == "file":  # installed with Install Penwise: its releases
+        release = latest_release()
+        if release and _newer(release[0], __version__):
+            return f"version {release[0]}"
     elif kind == "git":
         vcs = _direct_url().get("vcs_info", {})
         remote = _quiet(["git", "ls-remote", where, vcs.get("requested_revision") or "HEAD"]) or ""
@@ -79,8 +108,7 @@ def installed_with_uv() -> bool:
 def run() -> int:
     kind, where = install_source()
     if kind == "file":
-        print(f"To update Penwise, download the newest Install Penwise and open it: {DOWNLOAD_PAGE}")
-        return 1
+        return _update_from_release()
     if not installed_with_uv():
         print("Penwise wasn't installed with uv, so update it the way you installed it, for example:")
         print(f"  pip install --upgrade {where or 'penwise'}")
@@ -96,13 +124,57 @@ def run() -> int:
     if not ok:
         return 1
 
-    # The new version may come with a new Spoon; let the newly installed penwise set it up.
+    _refresh_hotkey()
     bin_path, args = setup_mac.penwise_command()
-    if platform.system() == "Darwin":
-        subprocess.run([bin_path, *args, "setup-mac", "--refresh"])
     version = subprocess.run([bin_path, *args, "--version"], capture_output=True, text=True).stdout.strip()
     print(f"✓ Updated: {version}")
     return 0
+
+
+def _uv() -> str | None:
+    found = shutil.which("uv") or str(Path.home() / ".local" / "bin" / "uv")  # where the installer puts it
+    return found if Path(found).exists() else None
+
+
+def _update_from_release() -> int:
+    """Update an installation made with Install Penwise from its newest release, like it did."""
+    release = latest_release()
+    uv = _uv()
+    if not release or not uv:
+        print(f"Penwise couldn't update itself. Download the newest Install Penwise and open it: {DOWNLOAD_PAGE}")
+        return 1
+    version, url = release
+    if not _newer(version, __version__):
+        print(f"Penwise is up to date ({__version__}).")
+        return 0
+    with tempfile.TemporaryDirectory() as folder:
+        wheel = Path(folder) / url.rsplit("/", 1)[-1]
+        try:
+            with urllib.request.urlopen(url, timeout=120, context=ssl_context()) as response:
+                wheel.write_bytes(response.read())
+        except OSError:
+            print("Couldn't download the new version. Check your internet connection, then try again.")
+            return 1
+        # A Python of uv's own, as the installer chose: the one macOS comes with may ask for developer tools.
+        help_text = subprocess.run([uv, "tool", "install", "--help"], capture_output=True, text=True).stdout
+        managed = "--managed-python" if "--managed-python" in help_text else "--python-preference=only-managed"
+        if not _run([uv, "tool", "install", "--force", "--reinstall", managed, "--python", "3.13", str(wheel)]):
+            return 1
+    # Started from the ✎ menu, the PATH is Hammerspoon's, without uv's tools: as the installer
+    # does, put them first, so the hotkey keeps calling `penwise` itself.
+    tools = subprocess.run([uv, "tool", "dir", "--bin"], capture_output=True, text=True).stdout.strip()
+    if tools:
+        os.environ["PATH"] = tools + os.pathsep + os.environ.get("PATH", "")
+    _refresh_hotkey()
+    print(f"✓ Updated: Penwise {version}")
+    return 0
+
+
+def _refresh_hotkey() -> None:
+    """The new version may come with a new Spoon; let the newly installed penwise set it up."""
+    bin_path, args = setup_mac.penwise_command()
+    if platform.system() == "Darwin":
+        subprocess.run([bin_path, *args, "setup-mac", "--refresh"])
 
 
 def _run(command: list[str]) -> bool:

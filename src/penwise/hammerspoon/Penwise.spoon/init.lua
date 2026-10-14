@@ -9,7 +9,7 @@ local obj = {}
 obj.__index = obj
 
 obj.name = "Penwise"
-obj.version = "0.6.20"
+obj.version = "0.7.0"
 obj.author = "LuckyLetter"
 obj.homepage = "https://github.com/LuckyLetter/penwise"
 obj.license = "Apache-2.0 - https://opensource.org/licenses/Apache-2.0"
@@ -101,8 +101,14 @@ local function concat(first, second)
   return out
 end
 
--- Where Hammerspoon keeps the hotkeys' letter chosen in the settings.
+-- Where Hammerspoon keeps the hotkeys' letter chosen in the settings, and the version last started.
 local LETTER_SETTING = "penwise.hotkeyLetter"
+local VERSION_SETTING = "penwise.version"
+
+-- 'text' for the shell, whatever it contains.
+local function shellQuote(text)
+  return "'" .. text:gsub("'", "'\\''") .. "'"
+end
 
 local function restoreClipboard(saved)
   if saved and next(saved) then
@@ -222,6 +228,14 @@ function obj:start()
     self.firstUpdateCheck = hs.timer.doAfter(30, function() self:_checkForUpdate() end)
     self.updateTimer = hs.timer.doEvery(24 * 3600, function() self:_checkForUpdate() end)
   end
+  -- Just updated (Penwise restarts Hammerspoon to load the new version): say so, once.
+  local last = hs.settings.get(VERSION_SETTING)
+  if last and last ~= obj.version then hs.alert.show("Penwise is up to date: version " .. obj.version, 4) end
+  hs.settings.set(VERSION_SETTING, obj.version)
+  -- An update that failed says so through a link to Hammerspoon (hammerspoon://penwiseUpdateFailed).
+  hs.urlevent.bind("penwiseUpdateFailed", function()
+    hs.alert.show("Penwise couldn't update. Try again later, or choose Check my setup… in the ✎ menu.", 6)
+  end)
   -- The first time, open the settings: Penwise needs a model before it can do anything.
   self.setupTask = hs.task.new(self.bin, function(_, stdout)
     local ok, data = pcall(hs.json.decode, stdout or "")
@@ -238,6 +252,7 @@ function obj:_checkForUpdate()
   self.updateTask = hs.task.new(self.bin, function(code, stdout)
     local ok, info = pcall(hs.json.decode, stdout or "")
     self.update = (code == 0 and ok and type(info) == "table" and info.available) and info.detail or nil
+    self.updateInPlace = self.update ~= nil and info.in_place == true
     if self.menu then self.menu:setTitle(self.update and "✎•" or "✎") end
   end, concat(self.args, { "update", "--check", "--json" }))
   self.updateTask:start()
@@ -280,7 +295,9 @@ function obj:_menuItems()
   end
   local items = {}
   if self.update then
-    table.insert(items, { title = "Update Penwise (" .. self.update .. ")…", fn = function() self:_openInTerminal("update") end })
+    table.insert(items, { title = "Update Penwise (" .. self.update .. ")…", fn = function()
+      if self.updateInPlace then self:_updateInPlace() else self:_openInTerminal("update") end
+    end })
     table.insert(items, { title = "-" })
   end
   for _, item in ipairs({
@@ -422,6 +439,20 @@ function obj:_saveSettings(values)
   task:setEnvironment(environment)
   self.saveTask = task
   task:start()
+end
+
+-- Update an installation made with Install Penwise, without the Terminal. `penwise update`
+-- restarts Hammerspoon at its end, so it runs on its own, apart from Hammerspoon, writing to a
+-- log; if it fails, it tells Hammerspoon through a link, and Penwise says so.
+function obj:_updateInPlace()
+  hs.alert.show("Updating Penwise… It restarts by itself in a minute.", 5)
+  local words = { shellQuote(self.bin) }
+  for _, arg in ipairs(self.args) do table.insert(words, shellQuote(arg)) end
+  local log = shellQuote(os.getenv("HOME") .. "/Library/Logs/penwise-update.log")
+  local command = table.concat(words, " ") .. " update > " .. log .. " 2>&1"
+    .. " || open -g 'hammerspoon://penwiseUpdateFailed'"
+  self.updateTask = hs.task.new("/bin/sh", nil, { "-c", "(" .. command .. ") > /dev/null 2>&1 &" })
+  self.updateTask:start()
 end
 
 -- Run a penwise command that needs no answer and shows nothing.

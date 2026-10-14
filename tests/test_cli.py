@@ -178,7 +178,7 @@ def test_keep_words(server, isolated, monkeypatch, capsys):
 def test_update_check(isolated, monkeypatch, capsys):
     monkeypatch.setattr(cli.updater, "check", lambda: "2 new changes")
     _, out, _ = run(["update", "--check", "--json"], monkeypatch, capsys)
-    assert json.loads(out) == {"available": True, "detail": "2 new changes"}
+    assert json.loads(out) == {"available": True, "detail": "2 new changes", "in_place": False}
     monkeypatch.setattr(cli.updater, "check", lambda: None)
     _, out, _ = run(["update", "--check"], monkeypatch, capsys)
     assert "up to date" in out
