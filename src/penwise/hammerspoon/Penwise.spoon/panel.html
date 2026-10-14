@@ -106,6 +106,26 @@
   .note-text { margin: 0; white-space: pre-wrap; font: 13px/1.55 ui-monospace, "SF Mono", Menlo, monospace; -webkit-user-select: text; user-select: text; }
   .error { color: var(--del); }
 
+  .form label { display: block; margin: 16px 0 6px; font-size: 12px; font-weight: 600; color: var(--muted); }
+  .form input, .form select {
+    width: 100%;
+    font: inherit;
+    padding: 7px 10px;
+    border: 1px solid var(--border);
+    border-radius: 7px;
+    background: var(--bg);
+    color: var(--text);
+    -webkit-user-select: text;
+    user-select: text;
+  }
+  .form input:focus, .form select:focus { outline: 2px solid var(--accent); outline-offset: -1px; }
+  .form .row { display: flex; gap: 8px; }
+  .form .row input { flex: 1; }
+  .form .hint { margin-top: 6px; font-size: 12px; color: var(--muted); }
+  .form .modes { margin-top: 2px; }
+  .form .result { margin-top: 16px; }
+  .form .title { margin: 6px 0 4px; font-size: 17px; font-weight: 600; }
+
   h2 { margin: 18px 0 8px; font-size: 12px; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: 0.04em; }
   ol { list-style: none; margin: 0; padding: 0; }
   li {
@@ -177,7 +197,7 @@ function post(message) {
 }
 
 const state = {
-  status: "idle", // idle | loading | ready | error | note | insights
+  status: "idle", // idle | loading | ready | error | note | insights | settings
   original: "",
   mode: "fix",
   model: "",
@@ -193,6 +213,10 @@ const state = {
   style: "academic",
   tips: false,
   readonly: false, // the text can't be edited where it came from (a terminal): copy the fix
+  settings: null, // what `penwise settings` says: the current settings and the choices
+  form: {}, // the settings as you change them
+  saving: false,
+  saved: null, // what saving said: it works, or what's wrong
   explaining: false,
   startedAt: 0,
   elapsedMs: 0,
@@ -381,6 +405,134 @@ function renderInsights(data) {
   return parts;
 }
 
+// The settings window: where the model runs (on this Mac, or an API), the API key and the model.
+// Save tests them at once.
+const OTHER_MODEL = "other";
+const LOCAL = "ollama";
+
+// A service Penwise knows (OpenRouter), from the API address you typed: for its key page and models.
+function knownService() {
+  const address = (state.form.base_url || "").trim().replace(/\/+$/, "");
+  return state.settings.providers.find((p) => p.base_url && p.base_url === address && p.key !== LOCAL);
+}
+
+// What depends on the API address: the key page link and the model suggestions. They update as
+// you type, without rebuilding the form (which would swallow a click on Paste).
+function keyHint() {
+  const service = knownService();
+  if (!service || !service.key_url) return ["It's kept in your Mac's Keychain."];
+  return [
+    el("button", { type: "button", class: "link", onclick: () => post({ action: "open-url", url: service.key_url }) },
+      "Get a key"),
+    " · it's kept in your Mac's Keychain",
+  ];
+}
+
+function suggestedModels() {
+  const service = knownService();
+  return (service ? service.models : []).map((m) => el("option", { value: m.id }, m.blurb));
+}
+
+function addressChanged(event) {
+  state.form.base_url = event.target.value;
+  document.getElementById("key-hint").replaceChildren(...keyHint());
+  document.getElementById("suggested-models").replaceChildren(...suggestedModels());
+}
+
+function chooseWhere(where) {
+  const saved = (state.settings.provider === LOCAL) === (where === LOCAL);
+  const local = state.settings.providers.find((p) => p.key === LOCAL);
+  state.form = {
+    ...state.form, where,
+    base_url: where === LOCAL ? "" : (saved ? state.settings.base_url : ""),
+    model: saved ? state.settings.model : (where === LOCAL ? local.models[0].id : ""),
+    otherModel: false,
+  };
+  state.saved = null;
+  render();
+}
+
+function input(attrs, field) {
+  return el("input", {
+    ...attrs, value: state.form[field] || "", oninput: (event) => { state.form[field] = event.target.value; },
+  });
+}
+
+function renderSettings() {
+  const local = state.form.where === LOCAL;
+  const service = local ? state.settings.providers.find((p) => p.key === LOCAL) : knownService();
+  const keySaved = state.settings.has_key && state.settings.provider !== LOCAL;
+  const parts = [
+    el("div", { class: "title" }, state.settings.configured ? "Settings" : "Welcome to Penwise"),
+    !state.settings.configured &&
+      el("div", { class: "muted" }, "Choose the AI model Penwise uses. You can change it any time from the ✎ menu."),
+    el("label", {}, "Where the model runs"),
+    el("div", { class: "modes", role: "group", "aria-label": "Where the model runs" },
+      el("button", { type: "button", "aria-pressed": String(local), onclick: () => chooseWhere(LOCAL) }, "On this Mac"),
+      el("button", { type: "button", "aria-pressed": String(!local), onclick: () => chooseWhere("api") }, "API"),
+    ),
+    el("div", { class: "hint" }, local
+      ? "Free and private: the model runs on your Mac, with Ollama (ollama.com)."
+      : "Any OpenAI-compatible API, with your API key."),
+  ];
+  if (!local) {
+    parts.push(
+      el("label", { for: "base_url" }, "Address"),
+      el("input", {
+        id: "base_url", value: state.form.base_url || "", placeholder: "https://openrouter.ai/api/v1",
+        oninput: addressChanged,
+      }),
+      el("label", { for: "key" }, "API key"),
+      el("div", { class: "row" },
+        input({ id: "key", type: "password", autocomplete: "off",
+          placeholder: keySaved ? "Saved in your Keychain" : "Paste your key" }, "key"),
+        el("button", { type: "button", class: "secondary", onclick: () => post({ action: "paste-key" }) }, "Paste"),
+      ),
+      el("div", { class: "hint", id: "key-hint" }, ...keyHint()),
+    );
+  }
+  parts.push(el("label", { for: local ? "model-choice" : "model-id" }, "Model"));
+  const models = local ? service.models : [];
+  const listed = models.some((m) => m.id === state.form.model);
+  if (local) {
+    const select = el("select", { id: "model-choice", onchange: (event) => {
+      state.form.otherModel = event.target.value === OTHER_MODEL;
+      state.form.model = state.form.otherModel ? "" : event.target.value;
+      render();
+    } },
+    ...models.map((m) => el("option", { value: m.id }, `${m.id} · ${m.blurb}`)),
+    el("option", { value: OTHER_MODEL }, "Another model…"));
+    select.value = listed && !state.form.otherModel ? state.form.model : OTHER_MODEL;
+    parts.push(select);
+  }
+  if (!local || !listed || state.form.otherModel) {
+    // Suggestions from a service Penwise knows; any model id works.
+    parts.push(input({ id: "model-id", list: "suggested-models", placeholder: "The model's id, as the service names it" }, "model"));
+    if (!local) parts.push(el("datalist", { id: "suggested-models" }, ...suggestedModels()));
+  }
+  if (state.saving) {
+    parts.push(el("div", { class: "result muted pulse" }, "Saving and testing…"));
+  } else if (state.saved && state.saved.ok) {
+    parts.push(el("div", { class: "result good" },
+      `It works: “${state.saved.before}” → “${state.saved.after}” (${state.saved.seconds}s)`));
+  } else if (state.saved) {
+    parts.push(el("div", { class: "result error" }, state.saved.message));
+  }
+  return [el("div", { class: "form" }, ...parts.filter(Boolean))];
+}
+
+function saveSettings() {
+  if (state.saving) return;
+  state.saving = true;
+  state.saved = null;
+  const { where, base_url, model } = state.form;
+  post({
+    action: "save-settings",
+    settings: { provider: where === LOCAL ? LOCAL : "custom", base_url: base_url || "", model, key: state.form.key || "" },
+  });
+  render();
+}
+
 function render() {
   document.querySelectorAll("[data-mode]").forEach((button) => {
     button.setAttribute("aria-pressed", String(button.dataset.mode === state.mode));
@@ -404,12 +556,14 @@ function render() {
     main.append(...renderInsights(state.insights));
   } else if (state.status === "note") {
     main.append(el("h2", {}, state.note.title), el("pre", { class: "note-text" }, state.note.text));
+  } else if (state.status === "settings") {
+    main.append(...renderSettings());
   } else if (state.status === "error") {
     main.append(el("div", { class: "error" }, state.error));
     main.append(
       el("div", { class: "status" },
-        el("button", { type: "button", class: "link", onclick: () => post({ action: "doctor" }) }, "Check my setup"),
-        el("span", { class: "muted" }, "  opens a diagnosis in Terminal"),
+        el("button", { type: "button", class: "link", onclick: () => post({ action: "settings" }) }, "Open settings"),
+        el("span", { class: "muted" }, "  to check the model and API key"),
       ),
     );
   } else if (state.status === "ready") {
@@ -428,10 +582,10 @@ function render() {
     }
   }
 
-  const reading = state.status === "insights" || state.status === "note";
+  const reading = state.status === "insights" || state.status === "note" || state.status === "settings";
   const button = document.getElementById("primary");
   button.firstChild.textContent = primaryLabel();
-  button.disabled = state.status === "loading" || state.status === "idle";
+  button.disabled = state.status === "loading" || state.status === "idle" || state.saving;
   document.getElementById("modes").hidden = reading;
   // Improve's tone: guessed from the app, one click to change.
   document.getElementById("tones").hidden = reading || state.mode !== "improve";
@@ -472,6 +626,7 @@ function replace() {
 
 // One button for whatever comes next: Replace (or Copy), Try again, or Done. Return presses it.
 function primaryLabel() {
+  if (state.status === "settings") return state.saved && state.saved.ok ? "Done" : "Save";
   if (state.status === "error") return "Try again";
   if (state.status === "loading" || (state.status === "ready" && state.changes.length)) {
     return state.readonly ? "Copy" : "Replace";
@@ -480,7 +635,8 @@ function primaryLabel() {
 }
 
 function primary() {
-  if (state.status === "error") retry();
+  if (state.status === "settings" && !(state.saved && state.saved.ok)) saveSettings();
+  else if (state.status === "error") retry();
   else if (state.status === "ready" && state.changes.length) state.readonly ? copy() : replace();
   else if (state.status !== "loading" && state.status !== "idle") post({ action: "cancel" });
 }
@@ -547,6 +703,30 @@ window.penwise = {
         stopTimers();
         Object.assign(state, { status: "error", error: event.message });
         break;
+      case "settings":
+        stopTimers();
+        Object.assign(state, {
+          status: "settings", original: "", settings: event, saving: false, saved: null,
+          form: event.provider === LOCAL
+            ? { where: LOCAL, base_url: "", model: event.model }
+            : { where: "api", base_url: event.base_url, model: event.model },
+        });
+        break;
+      case "saved":
+        state.saving = false;
+        state.saved = event;
+        if (event.saved) {
+          // What was saved is now the current setting.
+          const provider = state.form.where === LOCAL ? LOCAL : "custom";
+          Object.assign(state.settings, { provider, base_url: state.form.base_url, model: state.form.model });
+          if (state.form.key) state.settings.has_key = true;
+          state.form.key = "";
+        }
+        if (event.saved) state.settings.configured = true;
+        break;
+      case "pasted":
+        state.form.key = event.text.trim();
+        break;
     }
     render();
   },
@@ -571,6 +751,8 @@ document.addEventListener("mousedown", () => clearTimeout(autoClose));
 document.addEventListener("keydown", (event) => {
   clearTimeout(autoClose);
   const selection = String(window.getSelection());
+  // In the settings, keys type and move between fields as usual; Return saves, Esc closes.
+  if (state.status === "settings" && event.key !== "Enter" && event.key !== "Escape") return;
   if (event.key === "Enter") {
     event.preventDefault();
     primary();

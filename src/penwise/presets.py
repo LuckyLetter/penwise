@@ -6,6 +6,7 @@ low cost, and good with language. Any other model id works too.
 
 from __future__ import annotations
 
+import urllib.parse
 from dataclasses import dataclass
 
 
@@ -77,6 +78,17 @@ def reasoning_effort_for(model_id: str) -> str:
             if model.id == model_id:
                 return model.reasoning_effort
     return ""
+
+
+def is_local(base_url: str) -> bool:
+    """Whether the model server runs on this computer (likely a small model)."""
+    host = urllib.parse.urlparse(base_url).hostname or ""
+    return host in ("localhost", "127.0.0.1", "::1") or host.endswith(".local")
+
+
+def explains_well(provider: Provider, base_url: str) -> bool:
+    """Whether to ask the model for a reason per change: small local models often give wrong ones."""
+    return provider.explain and not (provider is CUSTOM and is_local(base_url))
 
 
 def provider_for(base_url: str) -> Provider | None:

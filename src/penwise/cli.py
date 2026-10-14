@@ -5,11 +5,12 @@ from __future__ import annotations
 import argparse
 import dataclasses
 import json
+import os
 import platform
 import sys
 import time
 
-from penwise import __version__, config, engine, history, presets, render, setup_mac, updater, wizard
+from penwise import __version__, config, engine, history, presets, render, settings, setup_mac, updater, wizard
 from penwise.config import ConfigError
 from penwise.lessons import LABELS, NOTES
 from penwise.llm import ChatClient, LLMError
@@ -95,6 +96,10 @@ def build_parser() -> argparse.ArgumentParser:
     p = sub.add_parser("history", help="show where your history is kept, or clear it")
     p.add_argument("--clear", action="store_true", help="delete the history file")
     p.set_defaults(run=cmd_history)
+
+    p = sub.add_parser("settings", help="the settings as JSON, or save them (used by the Mac settings window)")
+    p.add_argument("--save", action="store_true", help="save settings given as JSON in $PENWISE_SETTINGS or on stdin")
+    p.set_defaults(run=cmd_settings)
 
     p = sub.add_parser("try", help="open a practice note to try the hotkey on (macOS)")
     p.set_defaults(run=cmd_try)
@@ -285,6 +290,22 @@ def cmd_init(args: argparse.Namespace) -> int:
     path = config.write_template(force=args.force)
     print(f"Created {path}\nEdit it to choose your model, then run `penwise doctor`.")
     return 0
+
+
+def cmd_settings(args: argparse.Namespace) -> int:
+    if not args.save:
+        print(json.dumps(settings.describe()))
+        return 0
+    # From the Mac app the settings come in an environment variable: unlike arguments,
+    # other users' programs can't see those (the API key is among them).
+    raw = os.environ.get("PENWISE_SETTINGS") or sys.stdin.read()
+    try:
+        request = json.loads(raw)
+    except json.JSONDecodeError as exc:
+        raise ConfigError(f"settings --save expects JSON: {exc}") from exc
+    result = settings.save(request)
+    print(json.dumps(result))
+    return 0 if result["ok"] else 1
 
 
 def cmd_try(args: argparse.Namespace) -> int:

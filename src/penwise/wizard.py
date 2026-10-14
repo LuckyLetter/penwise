@@ -12,7 +12,6 @@ import platform
 import shutil
 import subprocess
 import time
-import urllib.parse
 import urllib.request
 import webbrowser
 from typing import TypeVar
@@ -39,7 +38,7 @@ def run() -> int:
     if values is None:
         return 1
     # Small local models often give wrong reasons, so explanations start off for them.
-    values["explain"] = provider.explain and not (provider is presets.CUSTOM and _is_local(values["base_url"]))
+    values["explain"] = presets.explains_well(provider, values["base_url"])
 
     if not test_connection(values) and not confirm("Save these settings anyway?", default=False):
         print("Nothing was saved. Run `penwise setup` again when you're ready.")
@@ -194,11 +193,6 @@ def _save(values: dict) -> None:
     # Empty strings mean "use the default", so they are left out of the file.
     config.write_config({k: v for k, v in values.items() if v != ""}, path)
     print(f"✓ Settings saved to {path}{note}")
-
-
-def _is_local(base_url: str) -> bool:
-    host = urllib.parse.urlparse(base_url).hostname or ""
-    return host in ("localhost", "127.0.0.1", "::1") or host.endswith(".local")
 
 
 def _ollama_running() -> bool:

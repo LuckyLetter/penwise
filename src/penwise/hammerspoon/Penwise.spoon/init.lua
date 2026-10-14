@@ -9,7 +9,7 @@ local obj = {}
 obj.__index = obj
 
 obj.name = "Penwise"
-obj.version = "0.4.10"
+obj.version = "0.5.0"
 obj.author = "LuckyLetter"
 obj.homepage = "https://github.com/LuckyLetter/penwise"
 obj.license = "Apache-2.0 - https://opensource.org/licenses/Apache-2.0"
@@ -180,6 +180,12 @@ function obj:start()
     self.firstUpdateCheck = hs.timer.doAfter(30, function() self:_checkForUpdate() end)
     self.updateTimer = hs.timer.doEvery(24 * 3600, function() self:_checkForUpdate() end)
   end
+  -- The first time, open the settings: Penwise needs a model before it can do anything.
+  self.setupTask = hs.task.new(self.bin, function(_, stdout)
+    local ok, data = pcall(hs.json.decode, stdout or "")
+    if ok and type(data) == "table" and data.configured == false then self:showSettings() end
+  end, concat(self.args, { "settings" }))
+  self.setupTask:start()
   return self
 end
 
@@ -239,7 +245,7 @@ function obj:_menuItems()
     { title = "-" },
     { title = "Your recurring fixes…", fn = function() self:showInsights() end },
     { title = "Try it on a practice note", fn = function() self:_runQuietly("try") end },
-    { title = "Settings…", fn = function() self:_openInTerminal("setup") end },
+    { title = "Settings…", fn = function() self:showSettings() end },
     { title = "Check my setup…", fn = function() self:_openInTerminal("doctor") end },
   }) do
     table.insert(items, item)
@@ -251,22 +257,54 @@ end
 --- Method
 --- Shows the fixes you make most often, in the Penwise panel.
 function obj:showInsights()
+  self:_showView("Your recurring fixes", "insights", { "insights", "--json" })
+end
+
+--- Penwise:showSettings()
+--- Method
+--- Shows the settings: where the model runs, the API key and the model.
+function obj:showSettings()
+  self:_showView("Settings", "settings", { "settings" })
+end
+
+-- Show the panel in the middle of the screen with what `penwise <command>` prints (JSON) as a
+-- view of the given type. It stays open when you switch apps (to copy an API key, say).
+function obj:_showView(title, view, command)
   self.target = hs.window.focusedWindow()
   self.app = hs.application.frontmostApplication() -- to go back to when you close it
   self.fullScreen = self.target ~= nil and self.target:isFullScreen() == true
   self.anchors = nil
   self:_showPanel()
-  self:_send(hs.json.encode({ type = "note", title = "Your recurring fixes", text = "Loading…" }))
-  self.insightsTask = hs.task.new(self.bin, function(_, stdout, stderr)
+  self.keepOpen = true
+  self:_send(hs.json.encode({ type = "note", title = title, text = "Loading…" }))
+  self.viewTask = hs.task.new(self.bin, function(_, stdout, stderr)
     local ok, data = pcall(hs.json.decode, stdout or "")
     if ok and type(data) == "table" then
-      data.type = "insights"
+      data.type = view
       self:_send(hs.json.encode(data))
     else
-      self:_send(hs.json.encode({ type = "note", title = "Your recurring fixes", text = stderr or "" }))
+      self:_send(hs.json.encode({ type = "note", title = title, text = stderr or "" }))
     end
-  end, concat(self.args, { "insights", "--json" }))
-  self.insightsTask:start()
+  end, concat(self.args, command))
+  self.viewTask:start()
+end
+
+-- Save the settings from the settings view, then show whether the model works. They go to
+-- `penwise` in an environment variable: unlike arguments, other users' programs can't see it.
+function obj:_saveSettings(values)
+  local task = hs.task.new(self.bin, function(_, stdout, stderr)
+    local ok, data = pcall(hs.json.decode, stdout or "")
+    if not (ok and type(data) == "table") then
+      data = { saved = false, ok = false, message = (stderr ~= "" and stderr) or "Penwise couldn't save the settings." }
+    end
+    data.type = "saved"
+    self:_send(hs.json.encode(data))
+  end, concat(self.args, { "settings", "--save" }))
+  local environment = task:environment()
+  environment.PENWISE_SETTINGS = hs.json.encode(values)
+  task:setEnvironment(environment)
+  self.saveTask = task
+  task:start()
 end
 
 -- Run a penwise command that needs no answer and shows nothing.
@@ -767,7 +805,7 @@ function obj:_showPanel()
           if not hasFocus then
             local shown = self.shownCount
             self.blurTimer = hs.timer.doAfter(0.2, function()
-              if not self.panelFocused and self.shownCount == shown and self.webview:isVisible() then
+              if not self.panelFocused and not self.keepOpen and self.shownCount == shown and self.webview:isVisible() then
                 self:_log("panel lost focus: closed")
                 self:_close() -- you clicked somewhere else: get out of the way
               end
@@ -803,6 +841,7 @@ end
 -- Check the text and stream the results into the review panel.
 function obj:_review(text, mode)
   self.text, self.mode = text, mode
+  self.keepOpen = false -- a check closes when you click elsewhere
   local readonly = self.source ~= nil and self.source.kind == "readonly"
   self:_send(hs.json.encode({ type = "begin", original = text, mode = mode, readonly = readonly or nil }))
   self:_run(text, mode, {}, function(_, line) self:_send(line) end)
@@ -895,6 +934,14 @@ function obj:_onMessage(body)
   elseif body.action == "doctor" then
     self:_close()
     self:_openInTerminal("doctor")
+  elseif body.action == "settings" then
+    self:showSettings()
+  elseif body.action == "save-settings" then
+    self:_saveSettings(body.settings)
+  elseif body.action == "paste-key" then
+    self:_send(hs.json.encode({ type = "pasted", text = hs.pasteboard.getContents() or "" }))
+  elseif body.action == "open-url" then
+    hs.urlevent.openURL(body.url)
   elseif body.action == "cancel" then
     self:_close()
     self:_returnToApp(function() self:_deselect() end)
@@ -1084,6 +1131,7 @@ end
 -- Hide the panel and ignore a check that is still running.
 function obj:_close()
   self.panelFocused = false
+  self.keepOpen = false
   self.run = self.run + 1
   if self.task and self.task:isRunning() then self.task:terminate() end
   if self.webview then self.webview:hide() end

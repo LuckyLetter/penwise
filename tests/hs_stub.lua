@@ -1,6 +1,6 @@
 -- A minimal stand-in for the Hammerspoon APIs the Penwise Spoon uses.
 -- Tests set SPOON_DIR, FIELD (the focused element's AX attributes), run_command(path, args,
--- input) and the JSON helpers. COPY_RESULT, if set, is what ⌘C puts on the clipboard, and
+-- input, env), ENVIRONMENT() (the environment a task starts with) and the JSON helpers. COPY_RESULT, if set, is what ⌘C puts on the clipboard, and
 -- FIELD.BOUNDS where the selected text is on screen. PANEL holds the panel's window.
 -- FIELD.IGNORES_AX_SELECTION makes the app ignore selections made through Accessibility, and
 -- FIELD.IGNORES_SELECT_ALL makes it ignore ⌘A. HELD_KEYS is how many times the hotkey's
@@ -56,6 +56,8 @@ local function newTask(path, done, stream, args)
   function task:isRunning() return false end
   function task:setInput() return self end
   function task:closeInput() return self end
+  function task:environment() return ENVIRONMENT() end
+  function task:setEnvironment(environment) self.env = environment; return self end
   return task
 end
 
@@ -70,7 +72,7 @@ function run_tasks()
     end
     if #TASKS == 0 then break end
     local task = table.remove(TASKS, 1)
-    local out, err, code = run_command(task.path, task.args, "")
+    local out, err, code = run_command(task.path, task.args, "", task.env)
     log("ran " .. table.concat(task.args, " "))
     if task.stream and DELIVERY == "stream" then
       -- Two chunks, split in the middle of a line, as a real pipe may do.
@@ -238,5 +240,6 @@ hs = {
       return MOUSE
     end,
   },
+  urlevent = { openURL = function(url) log("open " .. url) end },
   osascript = { applescript = function(script) log("applescript " .. script); return true end },
 }

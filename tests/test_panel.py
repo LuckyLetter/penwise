@@ -96,8 +96,8 @@ def test_explanations_and_errors_are_shown(page):
     assert page.locator("#primary").inner_text().startswith("Try again")  # the one button: what comes next
     page.keyboard.press("Enter")
     assert sent(page)[-1] == {"action": "retry", "mode": "fix"}
-    page.get_by_role("button", name="Check my setup").click()
-    assert sent(page)[-1] == {"action": "doctor"}
+    page.get_by_role("button", name="Open settings").click()
+    assert sent(page)[-1] == {"action": "settings"}
 
 
 def test_text_is_never_interpreted_as_html(page):
@@ -263,3 +263,132 @@ def test_text_that_cant_be_edited_there_is_copied(page):
     assert page.locator("#primary").inner_text().startswith("Copy")
     page.keyboard.press("Enter")
     assert sent(page)[-1] == {"action": "copy", "text": "an error"}
+
+
+SETTINGS = {
+    "type": "settings",
+    "configured": False,
+    "provider": "ollama",
+    "base_url": "http://localhost:11434/v1",
+    "model": "gemma3:1b",
+    "has_key": False,
+    "providers": [
+        {
+            "key": "openrouter",
+            "name": "OpenRouter",
+            "blurb": "cloud models with one API key (easiest to start)",
+            "base_url": "https://openrouter.ai/api/v1",
+            "key_url": "https://openrouter.ai/settings/keys",
+            "models": [
+                {"id": "mistralai/mistral-small-2603", "blurb": "fast, low cost"},
+                {"id": "openai/gpt-6-luna", "blurb": "stronger"},
+            ],
+        },
+        {
+            "key": "ollama",
+            "name": "Ollama",
+            "blurb": "free and private: the model runs on this computer",
+            "base_url": "http://localhost:11434/v1",
+            "key_url": "",
+            "models": [{"id": "gemma3:1b", "blurb": "small and quick"}],
+        },
+        {
+            "key": "custom",
+            "name": "Another service",
+            "blurb": "any OpenAI-compatible API",
+            "base_url": "",
+            "key_url": "",
+            "models": [],
+        },
+    ],
+}
+
+
+def test_settings_offer_two_choices_on_this_mac_or_an_api(page):
+    send(page, SETTINGS)
+    assert "Welcome to Penwise" in page.locator("main").inner_text()
+    choices = page.get_by_role("group", name="Where the model runs").get_by_role("button")
+    assert choices.all_inner_texts() == ["On this Mac", "API"]
+    assert page.locator("#primary").inner_text().startswith("Save")
+
+
+def test_settings_set_up_an_api_and_test_it(page):
+    send(page, SETTINGS)
+    page.get_by_role("button", name="API").click()
+    page.locator("#base_url").fill("https://openrouter.ai/api/v1")  # a service Penwise knows
+    page.get_by_role("button", name="Get a key").click()
+    assert sent(page)[-1] == {"action": "open-url", "url": "https://openrouter.ai/settings/keys"}
+    page.locator("#key").fill("sk-or-v1-abc")
+    page.locator("#model-id").fill("openai/gpt-6-luna")  # suggested, but any id works
+    assert page.locator("#suggested-models option").count() == 2
+    page.keyboard.press("Enter")  # Return saves
+    assert sent(page)[-1] == {
+        "action": "save-settings",
+        "settings": {
+            "provider": "custom",
+            "base_url": "https://openrouter.ai/api/v1",
+            "model": "openai/gpt-6-luna",
+            "key": "sk-or-v1-abc",
+        },
+    }
+    assert "Saving and testing" in page.locator("main").inner_text()
+
+    send(page, {"type": "saved", "saved": True, "ok": True, "before": "a eror", "after": "an error", "seconds": 1.2})
+    assert "It works: “a eror” → “an error” (1.2s)" in page.locator("main").inner_text()
+    assert page.locator("#key").get_attribute("placeholder") == "Saved in your Keychain"
+    page.keyboard.press("Enter")  # Done
+    assert sent(page)[-1] == {"action": "cancel"}
+
+
+def test_settings_show_an_api_already_set_up(page):
+    send(
+        page,
+        {
+            **SETTINGS,
+            "configured": True,
+            "provider": "openrouter",
+            "base_url": "https://openrouter.ai/api/v1",
+            "model": "mistralai/mistral-small-2603",
+            "has_key": True,
+        },
+    )
+    assert page.locator(".title").text_content() == "Settings"
+    assert page.locator("#base_url").input_value() == "https://openrouter.ai/api/v1"
+    assert page.locator("#key").get_attribute("placeholder") == "Saved in your Keychain"
+    assert page.locator("#model-id").input_value() == "mistralai/mistral-small-2603"
+
+
+def test_settings_say_what_is_wrong(page):
+    send(page, {**SETTINGS, "configured": True})
+    page.locator("#primary").click()
+    assert sent(page)[-1]["settings"] == {"provider": "ollama", "base_url": "", "model": "gemma3:1b", "key": ""}
+    send(page, {"type": "saved", "saved": True, "ok": False, "message": "Is Ollama running?"})
+    assert "Is Ollama running?" in page.locator(".error").inner_text()
+    assert page.locator("#primary").inner_text().startswith("Save")  # fix it and save again
+
+
+def test_settings_paste_the_key(page):
+    send(page, SETTINGS)
+    page.get_by_role("button", name="API").click()
+    page.locator("#base_url").fill("https://api.example.com/v1")
+    page.get_by_role("button", name="Paste").click()
+    assert sent(page)[-1] == {"action": "paste-key"}
+    send(page, {"type": "pasted", "text": " secret-key\n"})
+    assert page.locator("#key").input_value() == "secret-key"
+    page.locator("#model-id").fill("my-model")
+    page.keyboard.press("Tab")  # moves to the next field; no mode switch in the settings
+    page.locator("#primary").click()
+    assert sent(page)[-1]["settings"] == {
+        "provider": "custom",
+        "base_url": "https://api.example.com/v1",
+        "model": "my-model",
+        "key": "secret-key",
+    }
+
+
+def test_settings_another_local_model(page):
+    send(page, SETTINGS)
+    page.locator("#model-choice").select_option("other")
+    page.locator("#model-id").fill("llama3.2:3b")
+    page.locator("#primary").click()
+    assert sent(page)[-1]["settings"]["model"] == "llama3.2:3b"

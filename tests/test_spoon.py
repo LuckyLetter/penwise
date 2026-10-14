@@ -4,6 +4,7 @@ The real `penwise` CLI runs underneath, against the fake model server.
 """
 
 import json
+import os
 import subprocess
 import sys
 from pathlib import Path
@@ -28,6 +29,7 @@ class Spoon:
         g.json_encode = lambda table: json.dumps(self.to_python(table))
         g.json_decode = lambda text: self.to_lua(json.loads(text))
         g.run_command = self.run_command
+        g.ENVIRONMENT = lambda: self.to_lua(dict(os.environ))
         self.lua.execute(STUB.read_text())
         spoon = self.lua.eval('dofile(SPOON_DIR .. "init.lua")')
         spoon.bin = sys.executable
@@ -35,8 +37,9 @@ class Spoon:
         spoon.checkForUpdates = False  # tests don't look for updates online
         g.spoon = spoon.init(spoon)
 
-    def run_command(self, path, args, stdin):
-        proc = subprocess.run([path, *self.to_python(args)], input=stdin, capture_output=True, text=True)
+    def run_command(self, path, args, stdin, env=None):
+        env = self.to_python(env) if env is not None else None
+        proc = subprocess.run([path, *self.to_python(args)], input=stdin, capture_output=True, text=True, env=env)
         return proc.stdout, proc.stderr, proc.returncode
 
     def to_python(self, value):
@@ -290,13 +293,15 @@ def test_the_menu_shows_your_recurring_fixes(config):
     assert insights["repeated"][0]["pair"] == "in → on"
 
 
-def test_the_menu_opens_setup_in_terminal(config):
+def test_the_menu_opens_the_settings(config):
     spoon = Spoon("stream")
     spoon.run("spoon:start()")
     click(spoon, "Settings")
-    (script,) = [line for line in spoon.log if line.startswith("applescript")]
-    assert 'tell application "Terminal"' in script
-    assert script.rstrip().endswith('-m penwise setup"\nend tell')
+    spoon.message({"action": "ready"})
+    spoon.run_tasks()
+    view = spoon.events[-1]
+    assert view["type"] == "settings" and view["configured"] is True
+    assert not any(line.startswith("applescript") for line in spoon.log)  # no Terminal
 
 
 def test_an_error_offers_to_check_the_setup(isolated):
@@ -860,3 +865,51 @@ def test_the_panel_lines_up_with_the_left_edge_of_the_text_box(config, box_x, bo
     )
     spoon.run('spoon:check("fix")')
     assert panel_frame(spoon) == {"x": panel_x, "y": 700 - 12 - 240, "w": panel_w, "h": 240}
+
+
+def test_the_first_time_the_settings_open_by_themselves(isolated):
+    spoon = Spoon("stream")
+    spoon.run("spoon:start()")
+    spoon.run_tasks()  # Penwise asks whether it is set up: no, so the settings open
+    spoon.message({"action": "ready"})
+    spoon.run_tasks()
+    assert spoon.events[-1]["type"] == "settings" and spoon.events[-1]["configured"] is False
+
+
+def test_settings_are_saved_and_tested_without_the_key_on_the_command_line(isolated, server, monkeypatch):
+    monkeypatch.setattr("penwise.keychain.available", lambda: False)  # no Keychain in tests
+    spoon = Spoon("stream")
+    spoon.run("spoon:showSettings()")
+    spoon.message({"action": "ready"})
+    spoon.run_tasks()
+    values = {"provider": "custom", "base_url": server.url, "model": "some-model", "key": "secret-key"}
+    spoon.message({"action": "save-settings", "settings": values})
+    spoon.run_tasks()
+    saved = spoon.events[-1]
+    assert saved["type"] == "saved" and saved["ok"] is True
+    assert saved["after"] == "This sentence has an error."
+    assert "ran -m penwise settings --save" in spoon.log
+    assert not any("secret-key" in line for line in spoon.log)
+    assert 'model = "some-model"' in (isolated / "config.toml").read_text()
+
+
+def test_settings_paste_the_key_and_open_the_key_page(config):
+    spoon = Spoon("stream")
+    spoon.run("spoon:showSettings()")
+    spoon.message({"action": "ready"})
+    spoon.lua.globals().CLIPBOARD = "sk-or-v1-abc"
+    spoon.message({"action": "paste-key"})
+    assert spoon.events[-1] == {"type": "pasted", "text": "sk-or-v1-abc"}
+    spoon.message({"action": "open-url", "url": "https://openrouter.ai/settings/keys"})
+    assert spoon.log[-1] == "open https://openrouter.ai/settings/keys"
+
+
+def test_the_settings_stay_open_while_you_fetch_a_key(config):
+    spoon = Spoon("stream")
+    spoon.run("spoon:showSettings()")
+    spoon.message({"action": "ready"})
+    spoon.run('WINDOW_CALLBACK("focusChange", nil, false)')  # off to the browser
+    assert spoon.lua.globals().PANEL.visible
+    spoon.run('spoon:check("fix")')  # a check, though, closes when you click elsewhere
+    spoon.run('WINDOW_CALLBACK("focusChange", nil, false)')
+    assert not spoon.lua.globals().PANEL.visible
