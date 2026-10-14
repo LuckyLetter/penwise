@@ -9,7 +9,7 @@ local obj = {}
 obj.__index = obj
 
 obj.name = "Penwise"
-obj.version = "0.7.7"
+obj.version = "0.7.8"
 obj.author = "LuckyLetter"
 obj.homepage = "https://github.com/LuckyLetter/penwise"
 obj.license = "Apache-2.0 - https://opensource.org/licenses/Apache-2.0"
@@ -558,7 +558,8 @@ end
 -- Read the selection, check it is usable, and pass it on.
 function obj:_withSelection(callback)
   if not hs.fs.attributes(self.bin) then
-    hs.alert.show("Penwise: command not found at " .. self.bin .. ". Run `penwise setup` again.")
+    self:_log("penwise not found at %s", self.bin) -- the path is for the log; the alert says what to do
+    hs.alert.show("Penwise is missing a part. Open Install Penwise again to repair it.", 6)
     return
   end
   -- Without Accessibility permission, Hammerspoon can't read your text or paste the fix.

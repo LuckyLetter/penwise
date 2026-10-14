@@ -1125,3 +1125,12 @@ def test_the_settings_ask_the_service_for_its_models_with_the_key_out_of_sight(c
     assert listed["type"] == "models" and "gpt-test-mini" in listed["models"]
     assert "ran -m penwise settings --models" in spoon.log
     assert not any("secret-key" in line for line in spoon.log)
+
+
+def test_a_missing_penwise_says_how_to_repair_it_in_plain_words(config, tmp_path):
+    spoon = Spoon("stream")
+    log_file = tmp_path / "hotkey.log"
+    spoon.run(f'spoon.logFile = "{log_file}"; spoon.bin = "/nowhere/penwise"')
+    spoon.run('hs.fs.attributes = function(path) return nil end; spoon:check("fix")')
+    assert spoon.log[-1] == "alert Penwise is missing a part. Open Install Penwise again to repair it."
+    assert "/nowhere/penwise" in log_file.read_text()  # the details are in the log
