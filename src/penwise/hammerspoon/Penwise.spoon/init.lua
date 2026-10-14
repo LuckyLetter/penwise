@@ -9,7 +9,7 @@ local obj = {}
 obj.__index = obj
 
 obj.name = "Penwise"
-obj.version = "0.6.7"
+obj.version = "0.6.8"
 obj.author = "LuckyLetter"
 obj.homepage = "https://github.com/LuckyLetter/penwise"
 obj.license = "Apache-2.0 - https://opensource.org/licenses/Apache-2.0"
@@ -224,7 +224,10 @@ function obj:start()
   -- The first time, open the settings: Penwise needs a model before it can do anything.
   self.setupTask = hs.task.new(self.bin, function(_, stdout)
     local ok, data = pcall(hs.json.decode, stdout or "")
-    if ok and type(data) == "table" and data.configured == false then self:showSettings() end
+    if ok and type(data) == "table" then
+      self.configured = data.configured
+      if data.configured == false then self:showSettings() end
+    end
   end, concat(self.args, { "settings" }))
   self.setupTask:start()
   return self
@@ -335,6 +338,7 @@ function obj:_showView(title, view, command, waiting)
     if ok and type(data) == "table" then
       data.type = view
       if view == "settings" then
+        self.configured = data.configured
         data.access = hs.accessibilityState()
         local keys = self.hotkeys or {}
         data.hotkey = hotkeyLabel(keys.fix) -- what to press once it works
@@ -364,6 +368,7 @@ function obj:_saveSettings(values)
       data = { saved = false, ok = false, message = (stderr ~= "" and stderr) or "Penwise couldn't save the settings." }
     end
     data.type = "saved"
+    if data.saved then self.configured = true end
     self:_send(hs.json.encode(data))
   end, function(_, stdout)
     output = output .. (stdout or "")
@@ -404,6 +409,8 @@ end
 --- Method
 --- Reads the selected text in the frontmost app and opens the review panel.
 function obj:check(mode)
+  -- No model chosen yet (the welcome window was closed): open it again, rather than an error.
+  if self.configured == false then return self:showSettings() end
   -- In the panel itself, the hotkey switches the mode. From an app, it checks that app's text.
   if self:_panelInFront() then
     self:_review(self.text, mode)
@@ -426,6 +433,7 @@ end
 --- Method
 --- Fixes the selected text and replaces it right away, then says briefly what changed.
 function obj:quickFix()
+  if self.configured == false then return self:showSettings() end
   self:_withSelection(function(text)
     self.text = text
     local notice = hs.alert.show("Penwise: fixing…", 60)

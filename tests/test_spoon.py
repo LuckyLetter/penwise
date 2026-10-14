@@ -1027,3 +1027,26 @@ def test_the_shortcut_letter_chosen_in_the_settings_is_used_and_kept(config):
     again.run('spoon:bindHotkeys({ fix = { { "ctrl", "alt" }, "p" } }); spoon:start()')
     assert spoon.to_python(again.lua.globals().HOTKEY_KEYS) == {"fix": [["ctrl", "alt"], "e"]}
     assert any(item["title"].endswith("⌃⌥E") for item in menu_items(again))
+
+
+def test_until_a_model_is_chosen_the_hotkey_opens_the_settings(isolated, server, monkeypatch):
+    monkeypatch.setattr("penwise.keychain.available", lambda: False)
+    spoon = Spoon("stream")
+    spoon.run("spoon:start()")
+    spoon.run_tasks()  # not set up: the welcome window
+    spoon.message({"action": "ready"})
+    spoon.run_tasks()
+    spoon.message({"action": "cancel"})  # closed without choosing
+    spoon.run('spoon:check("fix")')
+    spoon.message({"action": "ready"})
+    spoon.run_tasks()
+    assert spoon.events[-1]["type"] == "settings"  # again, not an error about a model that isn't there
+    spoon.run("spoon:quickFix()")
+    assert spoon.events[-1]["type"] == "note"  # the settings, loading
+
+    values = {"provider": "custom", "base_url": server.url, "model": "m"}
+    spoon.message({"action": "save-settings", "settings": values})
+    spoon.run_tasks()
+    assert spoon.events[-1]["saved"] is True
+    spoon.run('spoon:check("fix")')
+    assert spoon.events[-1]["type"] == "begin"  # now it checks
