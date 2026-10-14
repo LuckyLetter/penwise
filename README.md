@@ -70,8 +70,9 @@ Three design rules keep it trustworthy:
    **Done**, open **System Settings → Privacy & Security**, scroll down, and click **Open Anyway** next to
    *Install Penwise*.
 
-2. **Choose a model** in the Penwise window that opens: *On this Mac* (free and private, with
-   [Ollama](https://ollama.com)) or *API* (paste your key; it goes in the macOS Keychain). Save tests it right away.
+2. **Choose a model** in the Penwise window that opens: *On this Mac* (free and private, in
+   [Ollama](https://ollama.com); Save starts it and downloads the model) or *API* (paste your key; it goes in the
+   macOS Keychain). Save tests it right away.
    When macOS asks, turn on Hammerspoon under **Accessibility**: that lets Penwise read and replace your text.
 
 3. **Use it.** Click in any text box and press **⌃⌥P** (Control+Option+P). Look over the changes, then press

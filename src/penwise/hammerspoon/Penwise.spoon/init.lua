@@ -9,7 +9,7 @@ local obj = {}
 obj.__index = obj
 
 obj.name = "Penwise"
-obj.version = "0.6.1"
+obj.version = "0.6.2"
 obj.author = "LuckyLetter"
 obj.homepage = "https://github.com/LuckyLetter/penwise"
 obj.license = "Apache-2.0 - https://opensource.org/licenses/Apache-2.0"
@@ -326,14 +326,32 @@ end
 
 -- Save the settings from the settings view, then show whether the model works. They go to
 -- `penwise` in an environment variable: unlike arguments, other users' programs can't see it.
+-- Steps that take a while (starting Ollama, downloading a model) come first, a line each.
 function obj:_saveSettings(values)
+  local output, buffer = "", ""
   local task = hs.task.new(self.bin, function(_, stdout, stderr)
-    local ok, data = pcall(hs.json.decode, stdout or "")
-    if not (ok and type(data) == "table") then
+    output = output .. "\n" .. (stdout or "")
+    local data -- the last line that isn't a step
+    for line in output:gmatch("[^\n]+") do
+      local ok, event = pcall(hs.json.decode, line)
+      if ok and type(event) == "table" and event.type ~= "progress" then data = event end
+    end
+    if not data then
       data = { saved = false, ok = false, message = (stderr ~= "" and stderr) or "Penwise couldn't save the settings." }
     end
     data.type = "saved"
     self:_send(hs.json.encode(data))
+  end, function(_, stdout)
+    output = output .. (stdout or "")
+    local lines
+    lines, buffer = takeLines(buffer .. (stdout or ""))
+    for _, line in ipairs(lines) do
+      local ok, event = pcall(hs.json.decode, line)
+      if ok and type(event) == "table" and event.type == "progress" then
+        self:_send(hs.json.encode({ type = "saving", text = event.text }))
+      end
+    end
+    return true
   end, concat(self.args, { "settings", "--save" }))
   local environment = task:environment()
   environment.PENWISE_SETTINGS = hs.json.encode(values)

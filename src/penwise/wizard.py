@@ -7,23 +7,20 @@ gives a working setup.
 from __future__ import annotations
 
 import getpass
-import json
 import platform
 import shutil
 import subprocess
 import time
-import urllib.request
 import webbrowser
 from typing import TypeVar
 
-from penwise import config, engine, keychain, presets, setup_mac
+from penwise import config, engine, keychain, ollama, presets, setup_mac
 from penwise.config import Config, ConfigError
 from penwise.llm import ChatClient, LLMError
 
 T = TypeVar("T")
 
 TEST_SENTENCE = "This sentence have a error."
-OLLAMA_API = "http://localhost:11434/api"
 
 
 def run() -> int:
@@ -131,20 +128,20 @@ def _ollama() -> dict | None:
             return None
         if not _run(["brew", "install", "ollama"]):
             return None
-    if not _ollama_running():
+    if not ollama.running():
         if shutil.which("brew"):
             _run(["brew", "services", "start", "ollama"])
         else:
             print("Starting Ollama: open the Ollama app.")
         for _ in range(15):
-            if _ollama_running():
+            if ollama.running():
                 break
             time.sleep(1)
         else:
             print("Ollama isn't running. Open the Ollama app (or run `ollama serve`), then run `penwise setup` again.")
             return None
 
-    installed = _ollama_models()
+    installed = ollama.models()
     model = _choose_model(presets.OLLAMA, installed)
     if model.id not in installed:
         if not confirm(f"Download {model.id} now (about 1 GB)?"):
@@ -197,22 +194,6 @@ def _save(values: dict) -> None:
     # Empty strings mean "use the default", so they are left out of the file.
     config.write_config({k: v for k, v in values.items() if v != ""}, path)
     print(f"✓ Settings saved to {path}{note}")
-
-
-def _ollama_running() -> bool:
-    try:
-        with urllib.request.urlopen(f"{OLLAMA_API}/version", timeout=2):
-            return True
-    except OSError:
-        return False
-
-
-def _ollama_models() -> set[str]:
-    try:
-        with urllib.request.urlopen(f"{OLLAMA_API}/tags", timeout=5) as response:
-            return {m["name"] for m in json.loads(response.read()).get("models", [])}
-    except (OSError, ValueError, KeyError):
-        return set()
 
 
 def _run(command: list[str]) -> bool:

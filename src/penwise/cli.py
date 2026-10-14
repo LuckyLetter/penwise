@@ -306,7 +306,8 @@ def cmd_settings(args: argparse.Namespace) -> int:
         request = json.loads(raw)
     except json.JSONDecodeError as exc:
         raise ConfigError(f"settings --save expects JSON: {exc}") from exc
-    result = settings.save(request)
+    # A line for each step that takes a while (starting Ollama, downloading a model), then the result.
+    result = settings.save(request, lambda text: print(json.dumps({"type": "progress", "text": text}), flush=True))
     print(json.dumps(result))
     return 0 if result["ok"] else 1
 

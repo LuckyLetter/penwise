@@ -2,15 +2,17 @@
 
 `penwise settings` describes the current settings and the services and models to
 choose from; `penwise settings --save` saves what the window sends and tries the
-model, so the window can say at once whether it works.
+model, so the window can say at once whether it works. For a model on this Mac it
+first gets Ollama ready: it starts the app and downloads the model if needed.
 """
 
 from __future__ import annotations
 
 import os
 import time
+from collections.abc import Callable
 
-from penwise import config, engine, keychain, presets
+from penwise import config, engine, keychain, ollama, presets
 from penwise.config import Config, ConfigError
 from penwise.llm import ChatClient, LLMError
 
@@ -44,8 +46,11 @@ def describe() -> dict:
     }
 
 
-def save(request: dict) -> dict:
-    """Save the settings from the window, then try the model. Returns what the window shows."""
+def save(request: dict, progress: Callable[[str], None] = lambda text: None) -> dict:
+    """Save the settings from the window, then try the model. Returns what the window shows.
+
+    `progress` hears what takes a while, like "Downloading gemma3:1b… 40% of 815 MB".
+    """
     provider = next((p for p in presets.PROVIDERS if p.key == request.get("provider")), presets.CUSTOM)
     base_url = (request.get("base_url") or provider.base_url).strip()
     if provider is presets.CUSTOM:  # an API: maybe one Penwise knows, like OpenRouter
@@ -76,7 +81,45 @@ def save(request: dict) -> dict:
     path = config.set_values(updates)
     if updates.get("api_key"):
         os.chmod(path, 0o600)  # the key is in the file: readable only by you
+    if provider is presets.OLLAMA and base_url == presets.OLLAMA.base_url:
+        problem = _get_ollama_ready(model, progress)
+        if problem:
+            return {"saved": True, "ok": False, **problem}
+        progress("Testing the model…")
     return {"saved": True, **test()}
+
+
+def _get_ollama_ready(model: str, progress: Callable[[str], None]) -> dict | None:
+    """Start Ollama and download the model if needed; return what's wrong, or None."""
+    if not ollama.running():
+        if not ollama.app():
+            return {
+                "message": "Models on your Mac run in Ollama, a free app. Download it, open it once, "
+                "then press Save again.",
+                "link": {"label": "Download Ollama", "url": ollama.DOWNLOAD_PAGE},
+            }
+        progress("Starting Ollama…")
+        if not ollama.start():
+            return {"message": "Ollama didn't start. Open it from your Applications folder, then press Save again."}
+    if ollama.has_model(model, ollama.models()):
+        return None
+    progress(f"Downloading {model}…")
+    shown = -1
+    try:
+        for done, total in ollama.pull(model):
+            if total < 1_000_000:  # the model's small parts (its license, ...) take no time
+                continue
+            percent = done * 100 // total
+            if percent != shown:  # a line per percent, not per packet
+                shown = percent
+                progress(f"Downloading {model}… {percent}% of {_size(total)}")
+    except ollama.OllamaError as exc:
+        return {"message": str(exc)}
+    return None
+
+
+def _size(count: int) -> str:
+    return f"{count / 1e9:.1f} GB" if count >= 1e9 else f"{count / 1e6:.0f} MB"
 
 
 def _not_saved(message: str) -> dict:

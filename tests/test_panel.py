@@ -402,3 +402,26 @@ def test_settings_another_local_model(page):
     page.locator("#model-id").fill("llama3.2:3b")
     page.locator("#primary").click()
     assert sent(page)[-1]["settings"]["model"] == "llama3.2:3b"
+
+
+def test_settings_show_the_model_download_then_link_to_ollama_when_it_is_missing(page):
+    send(page, SETTINGS)  # On this Mac
+    page.locator("#primary").click()
+    assert page.locator("#saving").inner_text() == "Saving and testing…"
+    send(page, {"type": "saving", "text": "Downloading gemma3:1b… 40% of 815 MB"})
+    assert page.locator("#saving").inner_text() == "Downloading gemma3:1b… 40% of 815 MB"
+
+    send(
+        page,
+        {
+            "type": "saved",
+            "saved": True,
+            "ok": False,
+            "message": "Models on your Mac run in Ollama, a free app. Download it, then press Save again.",
+            "link": {"label": "Download Ollama", "url": "https://ollama.com/download"},
+        },
+    )
+    page.get_by_role("button", name="Download Ollama").click()
+    assert sent(page)[-1] == {"action": "open-url", "url": "https://ollama.com/download"}
+    page.locator("#primary").click()  # Save again, once it's open
+    assert page.locator("#saving").inner_text() == "Saving and testing…"

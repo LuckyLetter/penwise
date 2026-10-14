@@ -481,7 +481,7 @@ function renderSettings() {
       el("button", { type: "button", "aria-pressed": String(!local), onclick: () => chooseWhere("api") }, "API"),
     ),
     el("div", { class: "hint" }, local
-      ? "Free and private: the model runs on your Mac, with Ollama (ollama.com)."
+      ? "Free and private: the model runs on your Mac, in Ollama. Save downloads it if needed (about 1 GB)."
       : "Any OpenAI-compatible API, with your API key."),
   ];
   if (!local) {
@@ -520,12 +520,15 @@ function renderSettings() {
     if (!local) parts.push(el("datalist", { id: "suggested-models" }, ...suggestedModels()));
   }
   if (state.saving) {
-    parts.push(el("div", { class: "result muted pulse" }, "Saving and testing…"));
+    parts.push(el("div", { class: "result muted pulse", id: "saving" }, state.savingText || "Saving and testing…"));
   } else if (state.saved && state.saved.ok) {
     parts.push(el("div", { class: "result good" },
       `It works: “${state.saved.before}” → “${state.saved.after}” (${state.saved.seconds}s)`));
   } else if (state.saved) {
-    parts.push(el("div", { class: "result error" }, state.saved.message));
+    const link = state.saved.link;
+    parts.push(el("div", { class: "result error" }, state.saved.message, link && " ",
+      link && el("button", { type: "button", class: "link", onclick: () => post({ action: "open-url", url: link.url }) },
+        link.label)));
   }
   return [el("div", { class: "form" }, ...parts.filter(Boolean))];
 }
@@ -533,6 +536,7 @@ function renderSettings() {
 function saveSettings() {
   if (state.saving) return;
   state.saving = true;
+  state.savingText = "";
   state.saved = null;
   const { where, base_url, model } = state.form;
   post({
@@ -735,6 +739,9 @@ window.penwise = {
         break;
       case "pasted":
         state.form.key = event.text.trim();
+        break;
+      case "saving": // a step that takes a while, like downloading the model
+        state.savingText = event.text;
         break;
       case "access":
         if (state.settings) state.settings.access = event.allowed ? (state.settings.access === false ? "now" : true) : false;

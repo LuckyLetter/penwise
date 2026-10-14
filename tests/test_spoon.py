@@ -964,3 +964,31 @@ def test_hammerspoon_starts_at_login_and_stays_out_of_sight_when_asked(config):
     spoon = Spoon("stream")
     spoon.run("spoon.background = true; spoon:start()")  # installed by the Penwise installer
     assert "hammerspoon menu icon: false" in spoon.log and "hammerspoon dock icon: false" in spoon.log
+
+
+@pytest.mark.parametrize("delivery", ["stream", "final"])
+def test_saving_shows_each_step_that_takes_a_while_then_the_result(config, tmp_path, delivery):
+    spoon = Spoon(delivery)
+    spoon.run("spoon:showSettings()")
+    spoon.message({"action": "ready"})
+    spoon.run_tasks()
+    fake = tmp_path / "penwise"  # saving a model on this Mac that has to be downloaded first
+    fake.write_text(
+        "#!/bin/sh\n"
+        """echo '{"type": "progress", "text": "Downloading gemma3:1b… 40% of 815 MB"}'\n"""
+        """echo '{"saved": true, "ok": true, "before": "a eror", "after": "an error", "seconds": 1.5}'\n"""
+    )
+    fake.chmod(0o755)
+    spoon.run(f'spoon.bin = "{fake}"; spoon.args = {{}}')
+    spoon.message({"action": "save-settings", "settings": {"provider": "ollama", "model": "gemma3:1b"}})
+    spoon.run_tasks()
+    if delivery == "stream":
+        assert spoon.events[-2] == {"type": "saving", "text": "Downloading gemma3:1b… 40% of 815 MB"}
+    assert spoon.events[-1] == {
+        "type": "saved",
+        "saved": True,
+        "ok": True,
+        "before": "a eror",
+        "after": "an error",
+        "seconds": 1.5,
+    }
