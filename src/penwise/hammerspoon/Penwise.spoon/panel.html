@@ -1,0 +1,1115 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Penwise</title>
+<style>
+  :root {
+    --bg: #ffffff;
+    --surface: #f5f5f7;
+    --text: #1d1d1f;
+    --muted: #6e6e73;
+    --border: #e3e3e8;
+    --accent: #2f6fde;
+    --accent-text: #ffffff;
+    --del: #c4302b;
+    --del-bg: #fdecea;
+    --ins: #1f7a3d;
+    --ins-bg: #e6f4ea;
+    --warn-bg: #fff6e0;
+    --warn-text: #7a5300;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #1e1e20;
+      --surface: #2a2a2d;
+      --text: #f2f2f4;
+      --muted: #a1a1a6;
+      --border: #3a3a3e;
+      --accent: #4c8dff;
+      --del: #ff7b72;
+      --del-bg: #3d1f1f;
+      --ins: #6fdc8c;
+      --ins-bg: #1c3624;
+      --warn-bg: #3a2f14;
+      --warn-text: #f5d68a;
+    }
+  }
+  * { box-sizing: border-box; }
+  html, body { height: 100%; margin: 0; }
+  html { background: transparent; }
+  body {
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    background: var(--bg);
+    color: var(--text);
+    font: 14px/1.5 -apple-system, BlinkMacSystemFont, "Helvetica Neue", sans-serif;
+    -webkit-user-select: none;
+    user-select: none;
+  }
+  header, footer {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 10px 16px;
+    border-color: var(--border);
+  }
+  footer { border-top: 1px solid var(--border); }
+  .spacer { flex: 1; }
+  /* Cancel and Save, as in a Mac alert: side by side, the same size, Cancel on the left. */
+  footer.pair #model, footer.pair .spacer { display: none; }
+  footer.pair button { flex: 1 1 0; }
+  .muted { color: var(--muted); font-size: 12px; }
+  #model { min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; opacity: 0.8; }
+
+  .modes { display: inline-flex; background: var(--surface); border-radius: 7px; padding: 2px; }
+  .modes button {
+    border: 0;
+    background: transparent;
+    color: var(--muted);
+    font: inherit;
+    font-size: 13px;
+    padding: 3px 12px;
+    border-radius: 5px;
+    cursor: pointer;
+  }
+  .modes button[aria-pressed="true"] { background: var(--bg); color: var(--text); box-shadow: 0 1px 2px rgb(0 0 0 / 0.15); }
+
+  main { flex: 1; overflow-y: auto; padding: 4px 16px 14px; }
+  .text {
+    white-space: pre-wrap;
+    word-wrap: break-word;
+    font-size: 15px;
+    line-height: 1.65;
+    -webkit-user-select: text;
+    user-select: text;
+  }
+  .loading .text { color: var(--muted); }
+  .status { margin-top: 12px; }
+  .pulse { animation: pulse 1.2s ease-in-out infinite; }
+  progress { display: block; width: 100%; height: 6px; margin-top: 6px; accent-color: var(--accent); }
+  @keyframes pulse { 50% { opacity: 0.4; } }
+
+  .change { cursor: pointer; border-radius: 3px; }
+  .change del { color: var(--del); background: var(--del-bg); text-decoration-thickness: 1px; }
+  .change ins { color: var(--ins); background: var(--ins-bg); text-decoration: none; }
+  .change del + ins { margin-left: 2px; }
+  .change.undone { text-decoration: underline dotted var(--muted); text-underline-offset: 3px; }
+  .change.active { outline: 2px solid var(--accent); outline-offset: 1px; }
+
+  .tips { margin: 0 0 12px; padding: 8px 12px; border-radius: 8px; background: var(--surface); font-size: 13px; color: var(--muted); }
+  .banner { margin: 0 0 12px; padding: 8px 12px; border-radius: 8px; background: var(--warn-bg); color: var(--warn-text); }
+  .good { margin-top: 12px; color: var(--ins); font-weight: 500; }
+  .insight { display: grid; grid-template-columns: 1fr auto; gap: 2px 12px; padding: 8px 0; border-bottom: 1px solid var(--border); }
+  .insight .count { color: var(--muted); font-variant-numeric: tabular-nums; }
+  .insight .bar { grid-column: 1 / 3; height: 4px; border-radius: 2px; background: var(--accent); opacity: 0.55; }
+  .insight .note, .insight .example { grid-column: 1 / 3; font-size: 13px; color: var(--muted); }
+  .note-text { margin: 0; white-space: pre-wrap; font: 13px/1.55 ui-monospace, "SF Mono", Menlo, monospace; -webkit-user-select: text; user-select: text; }
+  .error { color: var(--del); }
+
+  .form label { display: block; margin: 16px 0 6px; font-size: 12px; font-weight: 600; color: var(--muted); }
+  .form input, .form select {
+    width: 100%;
+    font: inherit;
+    padding: 7px 10px;
+    border: 1px solid var(--border);
+    border-radius: 7px;
+    background: var(--bg);
+    color: var(--text);
+    -webkit-user-select: text;
+    user-select: text;
+  }
+  .form input:focus, .form select:focus { outline: 2px solid var(--accent); outline-offset: -1px; }
+  .form .row { display: flex; gap: 8px; }
+  .form .row input { flex: 1; }
+  .form .shortcut { align-items: center; }
+  .form .shortcut .modifiers { font-size: 15px; }
+  .form .shortcut select { width: auto; }
+  .form .hint { margin-top: 6px; font-size: 12px; color: var(--muted); }
+  .form .modes { margin-top: 2px; }
+  .form .result { margin-top: 16px; }
+  .title { margin: 6px 0 4px; font-size: 17px; font-weight: 600; }
+  /* The window's title, and the language beside it. */
+  .title-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+  .form .title-row select { width: auto; padding: 3px 6px; font-size: 13px; }
+
+  h2 { margin: 18px 0 8px; font-size: 12px; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: 0.04em; }
+  ol { list-style: none; margin: 0; padding: 0; }
+  li {
+    display: grid;
+    grid-template-columns: 1fr auto;
+    gap: 2px 10px;
+    padding: 9px 10px;
+    border-radius: 8px;
+    cursor: pointer;
+  }
+  li:hover, li.active { background: var(--surface); }
+  li.undone .what, li.undone .note { opacity: 0.45; }
+  li .what { font-weight: 500; }
+  /* The change itself is a button for VoiceOver, drawn as plain text. */
+  li button.what { all: unset; font-weight: 500; cursor: pointer; }
+  li button.what:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 3px; }
+  li .what del { color: var(--del); text-decoration-thickness: 1px; }
+  li .what ins { color: var(--ins); text-decoration: none; }
+  li .tag { font-size: 12px; color: var(--accent); white-space: nowrap; }
+  li .note, li .why, li .seen { grid-column: 1 / 3; font-size: 13px; color: var(--muted); }
+  li .why { color: var(--text); }
+  li .risk { grid-column: 1 / 3; font-size: 13px; color: var(--warn-text); }
+  li .keep { grid-column: 1 / 3; font-size: 12px; color: var(--muted); }
+  button.link { border: 0; background: none; padding: 0; font: inherit; color: var(--accent); cursor: pointer; }
+  li .seen { font-size: 12px; }
+
+  button.primary, button.secondary {
+    font: inherit;
+    font-size: 13px;
+    border-radius: 7px;
+    padding: 5px 14px;
+    cursor: pointer;
+  }
+  /* A border like Cancel's, unseen under its colour: side by side, the two are the same size. */
+  button.primary { border: 1px solid transparent; background: var(--accent); color: var(--accent-text); }
+  /* Uninstall: red, and no ↩ hint, since Return doesn't press it. */
+  button.primary.danger { background: var(--del); color: #fff; }
+  button.primary.danger kbd { display: none; }
+  label.check { display: flex; gap: 8px; align-items: baseline; margin-top: 12px; }
+  button.secondary { border: 1px solid var(--border); background: var(--bg); color: var(--text); }
+  button:disabled { opacity: 0.4; cursor: default; }
+  [hidden] { display: none !important; }
+  /* Read by VoiceOver, not shown. */
+  .announce { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+  kbd { font: inherit; font-size: 11px; opacity: 0.75; margin-left: 6px; }
+</style>
+</head>
+<body>
+<header>
+  <div class="modes" id="modes" role="group" aria-label="Mode" data-tr-label="Mode">
+    <button type="button" data-mode="fix" title="Only fix errors (Tab to switch)" data-tr="Fix"
+      data-tr-title="Only fix errors (Tab to switch)">Fix</button>
+    <button type="button" data-mode="improve" title="Also improve clarity and flow (Tab to switch)" data-tr="Improve"
+      data-tr-title="Also improve clarity and flow (Tab to switch)">Improve</button>
+  </div>
+  <div class="modes" id="tones" role="group" aria-label="Tone" data-tr-label="Tone" hidden>
+    <button type="button" data-style="academic" title="Improve for research writing" data-tr="Research"
+      data-tr-title="Improve for research writing">Research</button>
+    <button type="button" data-style="email" title="Improve for an email" data-tr="Email"
+      data-tr-title="Improve for an email">Email</button>
+    <button type="button" data-style="chat" title="Improve for a chat message" data-tr="Chat"
+      data-tr-title="Improve for a chat message">Chat</button>
+  </div>
+</header>
+
+<main id="main"></main>
+<div class="announce" id="announce" aria-live="polite"></div>
+
+<footer>
+  <span class="muted" id="model"></span>
+  <span class="spacer"></span>
+  <button type="button" class="secondary" id="cancel" data-tr="Cancel" hidden>Cancel</button>
+  <button type="button" class="primary" id="primary">Replace<kbd>↩</kbd></button>
+</footer>
+
+<script>
+"use strict";
+
+// Messages to Hammerspoon. Outside Hammerspoon (e.g. in a browser) they are logged.
+function post(message) {
+  if (window.webkit && webkit.messageHandlers && webkit.messageHandlers.penwise) {
+    webkit.messageHandlers.penwise.postMessage(message);
+  } else {
+    console.log("penwise →", JSON.stringify(message));
+  }
+}
+
+// Penwise's words in the language chosen in its settings, by their English text (from Hammerspoon,
+// which reads locales/<language>.json); {name} is filled in from `values`. English till then.
+let strings = {};
+
+function tr(text, values) {
+  const out = strings[text] || text;
+  return values ? out.replace(/\{(\w+)\}/g, (match, name) => (name in values ? String(values[name]) : match)) : out;
+}
+
+// Marks a text for translation where it is shown, later, with tr().
+const N_ = (text) => text;
+
+// The texts written in the page itself: data-tr (its text), data-tr-title, data-tr-label.
+function translateStatic() {
+  document.querySelectorAll("[data-tr]").forEach((node) => { node.firstChild.textContent = tr(node.dataset.tr); });
+  document.querySelectorAll("[data-tr-title]").forEach((node) => { node.title = tr(node.dataset.trTitle); });
+  document.querySelectorAll("[data-tr-label]").forEach((node) => node.setAttribute("aria-label", tr(node.dataset.trLabel)));
+}
+
+// "1 change", "3 changes"
+function changesCount(count) {
+  return count === 1 ? tr("{count} change", { count }) : tr("{count} changes", { count });
+}
+
+const state = {
+  status: "idle", // idle | loading | ready | error | note | insights | settings
+  original: "",
+  mode: "fix",
+  model: "",
+  segments: [],
+  changes: [],
+  undone: new Set(),
+  kept: new Set(), // words you asked Penwise to always keep
+  warnings: [],
+  error: "",
+  note: { title: "", text: "" },
+  insights: null,
+  explain: false,
+  language: "en",
+  style: "academic",
+  tips: false,
+  readonly: false, // the text can't be edited where it came from (a terminal): copy the fix
+  settings: null, // what `penwise settings` says: the current settings and the choices
+  form: {}, // the settings as you change them
+  saving: false,
+  saved: null, // what saving said: it works, or what's wrong
+  explaining: false,
+  startedAt: 0,
+  elapsedMs: 0,
+};
+
+// While checking, a ticking timer shows that something is happening. When the
+// text needs no changes, the panel closes by itself unless you interact with it.
+const AUTO_CLOSE_MS = 1500;
+// After this long, a check says where a faster model can be chosen.
+const SLOW_MS = 10000;
+let ticker = null;
+let autoClose = null;
+
+function stopTimers() {
+  clearInterval(ticker);
+  clearTimeout(autoClose);
+  ticker = autoClose = null;
+}
+
+function progressText() {
+  const seconds = Math.floor((Date.now() - state.startedAt) / 1000);
+  const doing = state.statusText || (state.mode === "fix" ? tr("Checking…") : tr("Improving…"));
+  return doing + (seconds >= 1 ? ` ${seconds}s` : "");
+}
+
+function el(tag, attrs, ...children) {
+  const node = document.createElement(tag);
+  for (const [key, value] of Object.entries(attrs || {})) {
+    if (key === "class") node.className = value;
+    else if (key.startsWith("on")) node.addEventListener(key.slice(2), value);
+    else node.setAttribute(key, value);
+  }
+  for (const child of children) {
+    if (child !== null && child !== undefined && child !== false) node.append(child);
+  }
+  return node;
+}
+
+function finalText() {
+  const byId = new Map(state.changes.map((c) => [c.id, c]));
+  return state.segments
+    .map((seg) => ("text" in seg ? seg.text : (state.undone.has(seg.change) ? byId.get(seg.change).before : byId.get(seg.change).after)))
+    .join("");
+}
+
+function acceptedChanges() {
+  return state.changes.filter((c) => !state.undone.has(c.id));
+}
+
+function toggle(id) {
+  if (state.undone.has(id)) state.undone.delete(id);
+  else state.undone.add(id);
+  render();
+}
+
+// Offer "never change this" where the model may be "fixing" a name or a term: spelling
+// changes, or words with capitals or digits (Pytorch, ResNet50), of at most 3 words.
+const KEEPABLE = new Set(["spelling", "capitalization", "word-choice"]);
+
+function keepable(change) {
+  const word = change.before.trim();
+  return change.after.trim() && !change.risk && KEEPABLE.has(change.category) &&
+    (change.category === "spelling" || /[\p{Lu}\p{N}]/u.test(word)) &&
+    /^[\p{L}\p{N}][\p{L}\p{N}'’.\-]*(?: [\p{L}\p{N}'’.\-]+){0,2}$/u.test(word);
+}
+
+function keepWord(word) {
+  state.kept.add(word);
+  for (const change of state.changes) {
+    if (change.before.trim() === word) state.undone.add(change.id);
+  }
+  post({ action: "keep", word });
+  render();
+}
+
+function highlight(id, on) {
+  document.querySelectorAll(`[data-change="${id}"]`).forEach((node) => node.classList.toggle("active", on));
+}
+
+function changeWords(change) {
+  const before = change.before.trim();
+  const after = change.after.trim();
+  if (before && after && /[\p{L}\p{N}]/u.test(before + after)) {
+    return [el("del", {}, before), " → ", el("ins", {}, after)];
+  }
+  // Small edits (a comma, an added or dropped word) are easier to read after the word before them.
+  const lead = (change.context_before.match(/\S+\s*$/) || [""])[0];
+  return [lead, change.before && el("del", {}, change.before), change.after && el("ins", {}, change.after)];
+}
+
+function renderText() {
+  const byId = new Map(state.changes.map((c) => [c.id, c]));
+  const text = el("div", { class: "text" });
+  for (const seg of state.segments) {
+    if ("text" in seg) {
+      text.append(seg.text);
+      continue;
+    }
+    const change = byId.get(seg.change);
+    const undone = state.undone.has(change.id);
+    text.append(
+      el(
+        "span",
+        {
+          class: "change" + (undone ? " undone" : ""),
+          "data-change": change.id,
+          title: undone ? tr("Click to apply this change") : tr("Click to undo this change"),
+          onclick: () => toggle(change.id),
+          onmouseenter: () => highlight(change.id, true),
+          onmouseleave: () => highlight(change.id, false),
+        },
+        ...(undone ? [change.before] : [change.before && el("del", {}, change.before), change.after && el("ins", {}, change.after)]),
+      ),
+    );
+  }
+  return text;
+}
+
+function renderChanges() {
+  const list = el("ol");
+  const notesShown = new Set(); // each note once, under the first change it explains
+  state.changes.forEach((change) => {
+    const seen = change.seen ? tr("You've made this fix {count}× before.", { count: change.seen }) : "";
+    const note = notesShown.has(change.note) ? null : change.note;
+    notesShown.add(change.note);
+    list.append(
+      el(
+        "li",
+        {
+          class: state.undone.has(change.id) ? "undone" : "",
+          "data-change": change.id,
+          onclick: () => toggle(change.id),
+          onmouseenter: () => highlight(change.id, true),
+          onmouseleave: () => highlight(change.id, false),
+        },
+        // For VoiceOver: a button that says whether the change is in, and undoes or redoes it.
+        el("button", {
+          type: "button", class: "what", "aria-pressed": String(!state.undone.has(change.id)),
+          "aria-label": `${state.undone.has(change.id) ? tr("Not applied") : tr("Applied")}: `
+            + `${change.before.trim() || tr("(add)")} → ${change.after.trim() || tr("(remove)")}`,
+          onclick: (event) => { event.stopPropagation(); toggle(change.id); },
+        }, ...changeWords(change)),
+        el("span", { class: "tag" }, change.label),
+        note && el("span", { class: "note" }, note),
+        change.reason && el("span", { class: "why" }, tr("Why: {reason}", { reason: change.reason })),
+        change.risk && state.undone.has(change.id) &&
+          el("span", { class: "risk" }, change.after.trim()
+            ? tr("Not applied: it would change {what}. Click to apply it.", { what: change.risk })
+            : tr("Not applied: it would remove {what}. Click to apply it.", { what: change.risk })),
+        state.kept.has(change.before.trim())
+          ? el("span", { class: "keep" }, tr("Kept: Penwise won't change “{word}” again.", { word: change.before.trim() }))
+          : keepable(change) &&
+            el("span", { class: "keep" },
+              el("button", {
+                type: "button", class: "link",
+                onclick: (event) => { event.stopPropagation(); keepWord(change.before.trim()); },
+              }, tr("Always keep “{word}”", { word: change.before.trim() })),
+            ),
+        seen && el("span", { class: "seen" }, seen),
+      ),
+    );
+  });
+  return list;
+}
+
+// "Your recurring fixes": what you fix most, the rule for each, and fixes you keep repeating.
+function renderInsights(data) {
+  const parts = [el("h2", {}, tr("Your recurring fixes"))];
+  if (!data.total) {
+    parts.push(el("div", { class: "muted" }, tr("No history yet. Accept some changes, and your patterns will show up here.")));
+    return parts;
+  }
+  parts.push(el("div", { class: "muted" }, tr("{count} changes you accepted since {date}", { count: data.total, date: data.since })));
+  const most = Math.max(...data.categories.map((c) => c.count));
+  for (const category of data.categories) {
+    parts.push(
+      el("div", { class: "insight" },
+        el("strong", {}, category.label),
+        el("span", { class: "count" }, `${category.count}×`),
+        el("div", { class: "bar", style: `width: ${Math.max(4, (100 * category.count) / most)}%` }),
+        category.note && el("span", { class: "note" }, category.note),
+        category.example && el("span", { class: "example" }, tr("e.g. …{example}…", { example: category.example })),
+      ),
+    );
+  }
+  if (data.repeated.length) {
+    parts.push(el("h2", {}, tr("Fixes you've made more than once")));
+    for (const item of data.repeated) {
+      parts.push(
+        el("div", { class: "insight" },
+          el("strong", {}, item.pair),
+          el("span", { class: "count" }, `${item.count}×`),
+          item.example && el("span", { class: "example" }, tr("e.g. …{example}…", { example: item.example })),
+        ),
+      );
+    }
+  }
+  return parts;
+}
+
+// The settings window: the service's address, its API key if it needs one, and the model. One
+// form for every service, in the cloud or on this Mac (Ollama). Save tests them at once.
+const OLLAMA = "http://localhost:11434/v1";
+const ACCESSIBILITY_SETTINGS = "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility";
+
+// A service Penwise knows (OpenRouter), from the API endpoint you typed: for its key page and models.
+function knownService() {
+  return state.settings.providers.find((p) => p.base_url && p.base_url === address());
+}
+
+// What depends on the API endpoint: the key page link and the model suggestions. They update as
+// you type, without rebuilding the form (which would take the keyboard from the box you type in).
+// A model on this Mac needs no key.
+function onThisMac() {
+  return /^https?:\/\/(localhost|127\.0\.0\.1)(:|\/|$)/.test(address());
+}
+
+function keyHint() {
+  const service = knownService();
+  if (state.form.fromClipboard) return [tr("Filled in with the key you copied. Kept in your Mac's Keychain.")];
+  if (onThisMac()) return [tr("Not needed for a model on your Mac.")];
+  if (!service || !service.key_url) return [tr("Kept in your Mac's Keychain.")];
+  return [
+    el("button", { type: "button", class: "link", onclick: () => post({ action: "open-url", url: service.key_url }) },
+      tr("Get a key")),
+    " · " + tr("kept in your Mac's Keychain"),
+  ];
+}
+
+// The models the service itself lists for your key: no picks of Penwise's own.
+function suggestedModels() {
+  const fetched = state.fetched && state.fetched.base_url === address() ? state.fetched.models : [];
+  return fetched.map((id) => el("option", { value: id }));
+}
+
+// The address requests go under, from what you pasted as the endpoint: a request's whole URL
+// (…/v1/chat/completions), maybe without https://. As Penwise saves it (llm.api_base).
+function address() {
+  let url = (state.form.base_url || "").trim().replace(/\/+$/, "");
+  if (url && !url.includes("://")) url = (/^(localhost|127\.0\.0\.1|\[::1\])(:|\/|$)/.test(url) ? "http://" : "https://") + url;
+  return url.replace(/\/(chat\/completions|completions|responses|models)\/*$/, "").replace(/\/+$/, "");
+}
+
+// Ask the service which models it has for this key, a moment after the address or the key
+// changes; for services Penwise has no suggestions of its own for.
+let modelsTimer = null;
+let modelsAsked = "";
+
+function askForModels() {
+  clearTimeout(modelsTimer);
+  modelsTimer = setTimeout(() => {
+    const key = (state.form.key || "").trim();
+    const savedKey = state.settings.has_key && (state.settings.base_url || "").replace(/\/+$/, "") === address();
+    if (!address() || (!(key || savedKey) && !onThisMac())) return;
+    if (`${address()} ${key}` === modelsAsked) return;
+    modelsAsked = `${address()} ${key}`;
+    post({ action: "list-models", settings: { base_url: address(), key } });
+  }, 600);
+}
+
+function modelsListed() {
+  const list = document.getElementById("suggested-models");
+  if (list) list.replaceChildren(...suggestedModels());
+  const box = document.getElementById("model-id");
+  const count = list ? list.children.length : 0;
+  if (box && count) box.placeholder = modelPlaceholder(count);
+}
+
+// A change after saving needs saving again: the button goes back from Done to Save, and the
+// result of the last save goes, without rebuilding the form (you may be typing).
+function formEdited() {
+  state.edited = true;
+  if (state.saved) {
+    state.saved = null;
+    document.querySelectorAll(".form .result, #next, #slow-model").forEach((node) => node.remove());
+  }
+  updateButtons();
+}
+
+function addressChanged(event) {
+  formEdited();
+  state.form.base_url = event.target.value;
+  document.getElementById("key-hint").replaceChildren(...keyHint());
+  document.getElementById("suggested-models").replaceChildren(...suggestedModels());
+  askForModels();
+}
+
+// A key that shows its service (sk-or-… is OpenRouter's) fills in the address, if it's empty.
+function addressFromKey() {
+  if ((state.form.base_url || "").trim()) return false;
+  const key = (state.form.key || "").trim();
+  const known = (state.settings.key_prefixes || []).find((k) => key.startsWith(k.prefix));
+  if (known) state.form.base_url = known.base_url;
+  return Boolean(known);
+}
+
+function keyChanged(event) {
+  formEdited();
+  state.form.key = event.target.value;
+  state.form.fromClipboard = false;
+  document.getElementById("key-hint").replaceChildren(...keyHint());
+  if (addressFromKey()) {
+    document.getElementById("base_url").value = state.form.base_url;
+    addressChanged({ target: { value: state.form.base_url } });
+  }
+  askForModels();
+}
+
+// A key you copied, say from the service's website, fills itself in when you click in the
+// empty key box. Only then: macOS may ask whether Hammerspoon can read what you copied, and
+// that is when you mean to paste. Only text that starts like a key, never over one you typed.
+function looksLikeKey(text) {
+  return text.startsWith("sk-") || (state.settings.key_prefixes || []).some((k) => text.startsWith(k.prefix));
+}
+
+function apiKeySaved() {
+  return state.settings.has_key;
+}
+
+function askForCopiedKey() {
+  if (!apiKeySaved() && !(state.form.key || "").trim()) post({ action: "paste-key", auto: true });
+}
+
+function copiedKey(text) {
+  const box = document.getElementById("key");
+  if (!box || state.saving || apiKeySaved() || (state.form.key || "").trim() || !looksLikeKey(text)) return;
+  box.value = text; // in place, so the key box keeps the keyboard
+  keyChanged({ target: box });
+  state.form.fromClipboard = true;
+  document.getElementById("key-hint").replaceChildren(...keyHint());
+}
+
+// ⌘V in the key box: Hammerspoon has no Edit menu, so the window may not paste. When nothing
+// is pasted, Penwise pastes the key itself.
+let pasteFallback = null;
+
+function keyKeydown(event) {
+  if (event.metaKey && event.key === "v") {
+    clearTimeout(pasteFallback);
+    pasteFallback = setTimeout(() => post({ action: "paste-key" }), 150);
+  }
+}
+
+function input(attrs, field) {
+  return el("input", {
+    ...attrs, value: state.form[field] || "", oninput: (event) => { formEdited(); state.form[field] = event.target.value; },
+  });
+}
+
+function useOllama() {
+  const box = document.getElementById("base_url");
+  box.value = OLLAMA;
+  addressChanged({ target: box });
+}
+
+function modelPlaceholder(count) {
+  return count ? tr("Click to choose from {count} models", { count }) : tr("Paste your model name");
+}
+
+function renderSettings() {
+  const keySaved = state.settings.has_key;
+  const fromService = state.fetched && state.fetched.base_url === address() ? state.fetched.models.length : 0;
+  const parts = [
+    el("div", { class: "title-row" },
+      el("div", { class: "title" }, state.settings.configured ? tr("Settings") : tr("Welcome to Penwise")),
+      languageChoice()),
+    !state.settings.configured && el("div", { class: "muted" }, tr("Enter the API details from your AI provider.")),
+    // Without Accessibility, Penwise can't read the text box or put the fix in it.
+    state.settings.access === false && el("div", { class: "banner", id: "access" },
+      el("strong", {}, tr("Allow Penwise to read and replace text")),
+      el("div", {}, tr("In Privacy & Security → Accessibility, turn on Hammerspoon: it runs Penwise.") + " ",
+        el("button", { type: "button", class: "link", onclick: () => post({ action: "open-url", url: ACCESSIBILITY_SETTINGS }) },
+          tr("Open System Settings"))),
+    ),
+    state.settings.access === "now" && el("div", { class: "good", id: "access" }, tr("✓ Penwise can read and replace text.")),
+    el("label", { for: "base_url" }, tr("API Endpoint")),
+    el("input", {
+      id: "base_url", value: state.form.base_url || "", placeholder: "https://api.example.com/v1", oninput: addressChanged,
+    }),
+    el("div", { class: "hint" }, tr("Ollama on your Mac:") + " ",
+      el("button", { type: "button", class: "link", onclick: useOllama }, OLLAMA)),
+    // A key you copied fills itself in when you click in the box; ⌘V works too.
+    el("label", { for: "key" }, tr("API Key")),
+    el("input", { id: "key", type: "password", autocomplete: "off", value: state.form.key || "",
+      placeholder: keySaved ? tr("Saved in your Keychain") : tr("Paste your API key"), oninput: keyChanged,
+      onfocus: askForCopiedKey, onkeydown: keyKeydown, onpaste: () => clearTimeout(pasteFallback) }),
+    el("div", { class: "hint", id: "key-hint" }, ...keyHint()),
+    // The model's name, as you type it; the models the service lists come up as you click.
+    el("label", { for: "model-id" }, tr("Model")),
+    input({ id: "model-id", list: "suggested-models", placeholder: modelPlaceholder(fromService) }, "model"),
+    el("datalist", { id: "suggested-models" }, ...suggestedModels()),
+  ];
+  if (state.settings.configured && state.settings.hotkeys) parts.push(...shortcutChoice());
+  if (state.saving) {
+    // A step that says how far it is, like downloading a model ("… 40% of 815 MB"), gets a bar.
+    const percent = /(\d+)\s?%/.exec(state.savingText || "");
+    parts.push(percent
+      ? el("div", { class: "result muted", id: "saving" }, state.savingText,
+        el("progress", { max: "100", value: percent[1], "aria-label": tr("Download") }))
+      : el("div", { class: "result muted pulse", id: "saving" }, state.savingText || tr("Saving and testing…")));
+  } else if (state.saved && state.saved.ok) {
+    parts.push(el("div", { class: "result good" }, tr("It works: “{before}” → “{after}” ({seconds}s)",
+      { before: state.saved.before, after: state.saved.after, seconds: state.saved.seconds })));
+    // Slow even so: most often a model that thinks before answering.
+    if (state.saved.slow) {
+      parts.push(el("div", { class: "hint", id: "slow-model" },
+        tr("That was slow for a quick fix. A model that doesn't think before answering is faster.")));
+    }
+    // The first time: what to do next.
+    if (state.firstRun) {
+      parts.push(el("div", { class: "hint", id: "next" },
+        tr("You're all set: click in any text box and press {hotkey}.", { hotkey: state.settings.hotkey || "⌃⌥P" }) + " ",
+        el("button", { type: "button", class: "link", onclick: () => post({ action: "try" }) }, tr("Try it on a practice note"))));
+    }
+  } else if (state.saved) {
+    const link = state.saved.link;
+    parts.push(el("div", { class: "result error" }, state.saved.message, link && " ",
+      link && el("button", { type: "button", class: "link", onclick: () => post({ action: "open-url", url: link.url }) },
+        link.label)));
+  }
+  return [el("div", { class: "form" }, ...parts.filter(Boolean))];
+}
+
+// The language of Penwise's windows and notes, each by its name in itself. It changes at once:
+// Hammerspoon sends the new words, and keeps the choice in Penwise's settings.
+function languageChoice() {
+  const languages = state.settings.languages || [];
+  if (languages.length < 2) return null;
+  const select = el("select", { id: "language", "aria-label": tr("Language"), onchange: (event) => {
+    post({ action: "language", language: event.target.value });
+  } }, ...languages.map((language) => el("option", { value: language.code }, language.name)));
+  select.value = state.language;
+  return select;
+}
+
+// The hotkeys' letter (⌃⌥P → ⌃⌥E), for when another app uses ⌃⌥P. Not on the welcome window:
+// you'd find that out later.
+const LETTERS = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789".split("");
+
+function shortcutChoice() {
+  const keys = state.settings.hotkeys;
+  const withLetter = (label) => label.slice(0, -1) + (state.form.hotkey || label.slice(-1).toLowerCase()).toUpperCase();
+  const hint = () => [
+    keys.improve && tr("{keys} also improves the text", { keys: withLetter(keys.improve) }),
+    keys.quick && tr("{keys} fixes it right away", { keys: withLetter(keys.quick) }),
+  ].filter(Boolean).join(" · ");
+  const select = el("select", { id: "hotkey", "aria-label": tr("Shortcut letter"), onchange: (event) => {
+    formEdited();
+    state.form.hotkey = event.target.value.toLowerCase();
+    document.getElementById("hotkey-hint").textContent = hint();
+  } }, ...LETTERS.map((letter) => el("option", { value: letter }, letter)));
+  select.value = withLetter(keys.fix).slice(-1);
+  return [
+    el("label", { for: "hotkey" }, tr("Shortcut")),
+    el("div", { class: "row shortcut" }, el("span", { class: "modifiers" }, keys.fix.slice(0, -1)), select),
+    el("div", { class: "hint", id: "hotkey-hint" }, hint()),
+  ];
+}
+
+function saveSettings() {
+  if (state.saving) return;
+  state.saving = true;
+  state.savingText = "";
+  state.saved = null;
+  const { base_url, model, key } = state.form;
+  post({
+    action: "save-settings",
+    settings: { provider: "custom", base_url: base_url || "", model: model || "", key: key || "" },
+    ...(state.form.hotkey ? { hotkey: state.form.hotkey } : {}),
+  });
+  render();
+}
+
+// What VoiceOver says when something new happens: the result of a check, an error, a save.
+function announcement() {
+  if (state.status === "ready") {
+    const n = state.changes.length;
+    return n ? changesCount(n) : tr("Looks good. No changes needed.");
+  }
+  if (state.status === "error") return state.error;
+  if (state.status === "settings" && state.saved) {
+    return state.saved.ok ? tr("It works.") : state.saved.message;
+  }
+  return "";
+}
+
+function announce() {
+  const text = announcement();
+  const region = document.getElementById("announce");
+  if (region.textContent !== text) region.textContent = text; // the same again: nothing new to say
+}
+
+function render() {
+  translateStatic();
+  document.querySelectorAll("[data-mode]").forEach((button) => {
+    button.setAttribute("aria-pressed", String(button.dataset.mode === state.mode));
+  });
+  document.querySelectorAll("[data-style]").forEach((button) => {
+    button.setAttribute("aria-pressed", String(button.dataset.style === state.style));
+  });
+  const took = state.status === "ready" && state.elapsedMs ? ` · ${(state.elapsedMs / 1000).toFixed(1)}s` : "";
+  // "mistralai/mistral-small-2603" → "mistral-small-2603"
+  document.getElementById("model").textContent = state.model.split("/").pop() + took;
+  document.getElementById("model").title = state.model;
+
+  const main = document.getElementById("main");
+  main.className = state.status;
+  main.replaceChildren();
+
+  if (state.status === "loading") {
+    main.append(el("div", { class: "text" }, state.original));
+    main.append(el("div", { class: "status muted pulse", id: "progress" }, progressText()));
+  } else if (state.status === "insights") {
+    main.append(...renderInsights(state.insights));
+  } else if (state.status === "note") {
+    main.append(el("h2", {}, state.note.title), el("pre", { class: "note-text" }, state.note.text));
+    // The setup report: to send to someone helping you, without the Terminal.
+    if (state.note.copyable) {
+      main.append(el("div", { class: "status" },
+        el("button", { type: "button", class: "link", onclick: copy }, tr("Copy")),
+        el("span", { class: "muted" }, "  " + tr("to send it to someone helping you"))));
+    }
+  } else if (state.status === "settings") {
+    main.append(...renderSettings());
+  } else if (state.status === "uninstall") {
+    // Everything Penwise put on this Mac goes: Hammerspoon too, when Penwise set it up.
+    main.append(
+      el("div", { class: "title" }, tr("Uninstall Penwise")),
+      el("div", {}, state.uninstall.offer
+        ? tr("This removes Penwise and everything it put on your Mac: the shortcut, your settings, API key and history, and Hammerspoon, which Penwise set up for its shortcut.")
+        : tr("This removes Penwise and everything it put on your Mac: the shortcut, your settings, API key and history.")),
+    );
+  } else if (state.status === "error") {
+    main.append(el("div", { class: "error" }, state.error));
+    const link = state.errorLink; // a page where the fix is, like adding credits
+    if (link) {
+      main.append(el("div", { class: "status" },
+        el("button", { type: "button", class: "link", onclick: () => post({ action: "open-url", url: link.url }) }, link.label)));
+    } else if (state.errorInSettings) { // not for a busy service, say: the message says what to do
+      main.append(el("div", { class: "status" },
+        el("button", { type: "button", class: "link", onclick: () => post({ action: "settings" }) }, tr("Open settings")),
+        el("span", { class: "muted" }, "  " + tr("to check the model and API key")),
+      ));
+    }
+  } else if (state.status === "ready") {
+    if (state.tips && state.changes.length) {
+      main.append(el("div", { class: "tips" },
+        tr("Click a change to undo it. Not sure how to say something? Write it in your own language, [[like this]], or leave [[?]] for a word.")));
+    }
+    for (const warning of state.warnings) main.append(el("div", { class: "banner" }, warning));
+    main.append(renderText());
+    if (state.changes.length) {
+      const title = changesCount(state.changes.length) + (state.explaining ? " · " + tr("explaining…") : "");
+      main.append(el("h2", {}, title), renderChanges());
+    } else if (!state.warnings.length) {
+      main.append(el("div", { class: "good" }, tr("Looks good. No changes needed.")));
+    }
+  }
+
+  const reading = ["insights", "note", "settings", "uninstall"].includes(state.status);
+  const button = document.getElementById("primary");
+  updateButtons();
+  button.classList.toggle("danger", state.status === "uninstall");
+  button.disabled = state.status === "loading" || state.status === "idle" || state.saving;
+  document.getElementById("modes").hidden = reading;
+  // Improve's tone: guessed from the app, one click to change.
+  document.getElementById("tones").hidden = reading || state.mode !== "improve";
+  announce();
+  if (state.status !== "idle") reportSize();
+}
+
+// Tell Hammerspoon how tall the content is, so the window fits it: a short text gets a
+// small panel. `viewport` lets it work out how much the window adds (the title bar).
+let reportedHeight = 0;
+
+function reportSize() {
+  const main = document.getElementById("main");
+  main.style.flex = "none"; // as tall as its content, for a moment
+  const height = document.querySelector("header").offsetHeight + main.offsetHeight +
+    document.querySelector("footer").offsetHeight;
+  main.style.flex = "";
+  if (Math.abs(height - reportedHeight) > 2) {
+    reportedHeight = height;
+    post({ action: "size", height, viewport: window.innerHeight });
+  }
+}
+
+function setMode(mode) {
+  if (mode !== state.mode && state.original && state.status !== "note") post({ action: "mode", mode });
+}
+
+function setStyle(style) {
+  if (style !== state.style && state.original && state.mode === "improve") post({ action: "style", style });
+}
+
+function replace() {
+  if (state.status !== "ready") return;
+  const accepted = acceptedChanges().map(({ before, after, category, context_before, context_after }) => ({
+    before, after, category, context_before, context_after,
+  }));
+  post({ action: "replace", text: finalText(), changes: accepted });
+}
+
+// One button for whatever comes next: Replace (or Copy), Try again, or Done. Return presses it.
+// Named in English here, shown in your language.
+function primaryLabel() {
+  if (state.status === "settings") {
+    // Nothing changed in settings that work: Done just closes them.
+    const unchanged = state.settings.configured && !state.edited && !state.saved;
+    return (state.saved && state.saved.ok) || unchanged ? N_("Done") : N_("Save");
+  }
+  if (state.status === "error") return N_("Try again");
+  if (state.status === "uninstall") return N_("Uninstall");
+  if (state.status === "loading" || (state.status === "ready" && state.changes.length)) {
+    return state.readonly ? N_("Copy") : N_("Replace");
+  }
+  return N_("Done");
+}
+
+// With Save and Uninstall, as in a Mac alert: Cancel, which Esc presses too. Done needs none.
+function updateButtons() {
+  document.getElementById("primary").firstChild.textContent = tr(primaryLabel());
+  const cancel = state.status === "uninstall" || (state.status === "settings" && primaryLabel() === "Save");
+  document.getElementById("cancel").hidden = !cancel;
+  document.querySelector("footer").classList.toggle("pair", cancel);
+}
+
+function primary() {
+  if (state.status === "uninstall") {
+    post({ action: "uninstall", hammerspoon: state.uninstall.offer });
+    return;
+  }
+  if (state.status === "settings" && primaryLabel() === "Save") saveSettings();
+  else if (state.status === "error") retry();
+  else if (state.status === "ready" && state.changes.length) state.readonly ? copy() : replace();
+  else if (state.status !== "loading" && state.status !== "idle") post({ action: "cancel" });
+}
+
+function retry() {
+  if (state.status === "error" && state.original) post({ action: "retry", mode: state.mode });
+}
+
+function copy() {
+  if (state.status === "ready") post({ action: "copy", text: finalText() });
+  else if (state.status === "note" && state.note.copyable) post({ action: "copy-text", text: state.note.text });
+}
+
+// Events from Hammerspoon (begin) and from `penwise check --format jsonl` (the rest).
+window.penwise = {
+  receive(event) {
+    switch (event.type) {
+      case "language": // Penwise's words from now on: the window shows them at once
+        strings = event.strings && !Array.isArray(event.strings) ? event.strings : {};
+        state.language = event.language || "en";
+        document.documentElement.lang = event.tag || state.language;
+        break;
+      case "begin":
+        stopTimers();
+        Object.assign(state, {
+          status: "loading", original: event.original, mode: event.mode, startedAt: Date.now(), elapsedMs: 0,
+          checkingFrom: Date.now(), // for the "taking a while?" hint: not while Ollama starts
+          readonly: Boolean(event.readonly), statusText: "",
+          segments: [], changes: [], undone: new Set(), warnings: [], error: "", explaining: false,
+        });
+        ticker = setInterval(() => {
+          const progress = document.getElementById("progress");
+          if (progress) progress.textContent = progressText();
+          if (progress && !state.statusText && Date.now() - state.checkingFrom > SLOW_MS && !document.getElementById("slow")) {
+            progress.after(el("div", { class: "status muted", id: "slow" }, tr("Taking a while? A faster model helps:") + " ",
+              el("button", { type: "button", class: "link", onclick: () => post({ action: "settings" }) }, tr("Open settings"))));
+            reportSize();
+          }
+        }, 250);
+        break;
+      case "start":
+        state.model = event.model;
+        state.style = event.style || "academic";
+        state.tips = Boolean(event.tips);
+        state.explain = Boolean(event.explain);
+        break;
+      case "status": { // a step before the check, like starting Ollama
+        state.statusText = event.text;
+        if (!event.text) state.checkingFrom = Date.now();
+        const progress = document.getElementById("progress");
+        if (progress) progress.textContent = progressText();
+        return;
+      }
+      case "result":
+        stopTimers();
+        Object.assign(state, {
+          status: "ready", segments: event.segments, changes: event.changes, warnings: event.warnings,
+          explaining: state.explain && event.changes.length > 0, elapsedMs: event.elapsed_ms,
+          // Changes to numbers, citations, acronyms, math, code or links start out not applied.
+          undone: new Set(event.changes.filter((c) => c.risk).map((c) => c.id)),
+        });
+        if (!event.changes.length && !event.warnings.length) {
+          autoClose = setTimeout(() => post({ action: "cancel" }), AUTO_CLOSE_MS);
+        }
+        break;
+      case "explanations":
+        for (const change of state.changes) {
+          if (event.reasons[change.id]) change.reason = event.reasons[change.id];
+        }
+        break;
+      case "done":
+        state.explaining = false;
+        break;
+      case "insights":
+        stopTimers();
+        Object.assign(state, { status: "insights", original: "", insights: event });
+        break;
+      case "note":
+        stopTimers();
+        Object.assign(state, {
+          status: "note", original: "", note: { title: event.title, text: event.text, copyable: Boolean(event.copyable) },
+        });
+        break;
+      case "uninstall":
+        stopTimers();
+        Object.assign(state, { status: "uninstall", original: "", uninstall: { offer: event.hammerspoon } });
+        break;
+      case "error":
+        stopTimers();
+        Object.assign(state, {
+          status: "error", error: event.message, errorLink: event.link || null, errorInSettings: event.in_settings !== false,
+        });
+        break;
+      case "settings":
+        stopTimers();
+        Object.assign(state, {
+          status: "settings", original: "", settings: event, saving: false, saved: null, firstRun: !event.configured,
+        });
+        // The first time, nothing is chosen for you.
+        state.form = event.configured ? { base_url: event.base_url, model: event.model } : { base_url: "", model: "" };
+        state.fetched = null;
+        state.edited = false;
+        modelsAsked = "";
+        askForModels();
+        break;
+      case "saved":
+        state.saving = false;
+        state.saved = event;
+        if (event.base_url) state.form.base_url = event.base_url; // as saved: a pasted URL, tidied
+        if (event.saved) {
+          // What was saved is now the current setting.
+          Object.assign(state.settings, { base_url: state.form.base_url, model: state.form.model });
+          if (state.form.key) state.settings.has_key = true;
+          state.form.key = "";
+        }
+        if (event.saved) state.settings.configured = true;
+        break;
+      case "pasted":
+        if (event.auto) return copiedKey(event.text.trim()); // in place: no render
+        state.form.key = event.text.trim();
+        state.form.fromClipboard = false;
+        addressFromKey();
+        askForModels();
+        break;
+      case "models": // what the service listed for an address
+        state.fetched = { base_url: event.base_url, models: Array.isArray(event.models) ? event.models : [] };
+        modelsListed();
+        return;
+      case "saving": // a step that takes a while, like downloading the model
+        state.savingText = event.text;
+        break;
+      case "access":
+        if (state.settings) state.settings.access = event.allowed ? (state.settings.access === false ? "now" : true) : false;
+        break;
+    }
+    render();
+  },
+};
+
+document.querySelectorAll("[data-mode]").forEach((button) => {
+  button.addEventListener("click", () => setMode(button.dataset.mode));
+});
+document.querySelectorAll("[data-style]").forEach((button) => {
+  button.addEventListener("click", () => setStyle(button.dataset.style));
+});
+document.getElementById("primary").addEventListener("click", primary);
+document.getElementById("cancel").addEventListener("click", () => post({ action: "cancel" }));
+
+// A new width can change how the text wraps.
+window.addEventListener("resize", () => {
+  if (state.status !== "idle") reportSize();
+});
+
+// Any interaction keeps a "looks good" panel open.
+document.addEventListener("mousedown", () => clearTimeout(autoClose));
+
+// The window moves by its top and bottom strips and its title, as a Mac window by its title
+// bar: Hammerspoon moves it with the mouse.
+let dragging = false;
+
+document.addEventListener("mousedown", (event) => {
+  const handle = event.target.closest("header, footer, .title, h2");
+  if (event.button !== 0 || !handle || event.target.closest("button, input, select, a")) return;
+  event.preventDefault(); // no text selected, and the box you're typing in keeps the keyboard
+  dragging = true;
+  post({ action: "drag-start" });
+});
+document.addEventListener("mousemove", (event) => {
+  if (!dragging) return;
+  if (event.buttons & 1) post({ action: "drag" });
+  else stopDragging(); // let go outside the window
+});
+document.addEventListener("mouseup", () => stopDragging());
+
+function stopDragging() {
+  if (!dragging) return;
+  dragging = false;
+  post({ action: "drag-end" });
+}
+
+document.addEventListener("keydown", (event) => {
+  clearTimeout(autoClose);
+  const selection = String(window.getSelection());
+  // In the settings, keys type and move between fields as usual; Return saves, Esc closes.
+  if (state.status === "settings" && event.key !== "Enter" && event.key !== "Escape") return;
+  // Uninstalling takes a click: Return, the usual next step, must not remove anything.
+  if (state.status === "uninstall" && event.key !== "Escape") return;
+  if (event.key === "Enter") {
+    event.preventDefault();
+    primary();
+  } else if (event.key === "Escape") {
+    event.preventDefault();
+    post({ action: "cancel" });
+  } else if (event.key === "Tab") {
+    event.preventDefault();
+    setMode(state.mode === "fix" ? "improve" : "fix");
+  } else if (event.metaKey && event.key === "c" && !selection) {
+    event.preventDefault();
+    copy();
+  } else if (/^[1-9]$/.test(event.key) && !event.metaKey && state.status === "ready") {
+    const change = state.changes[Number(event.key) - 1];
+    if (change) toggle(change.id);
+  }
+});
+
+render();
+post({ action: "ready" });
+</script>
+</body>
+</html>
