@@ -22,6 +22,8 @@ permissions:
 jobs:
   test:
     runs-on: ubuntu-latest
+    # Each job stops when stuck (an install that hangs), instead of using minutes for hours.
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -41,6 +43,7 @@ jobs:
   release:
     needs: test
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     outputs:
       signed: ${{ steps.signing.outputs.signed }}
     steps:
@@ -85,6 +88,7 @@ jobs:
     needs: release
     if: needs.release.outputs.signed == 'true'
     runs-on: macos-latest
+    timeout-minutes: 45 # notarizing waits for Apple
     env:
       MACOS_CERTIFICATE: ${{ secrets.MACOS_CERTIFICATE }}
       MACOS_CERTIFICATE_PASSWORD: ${{ secrets.MACOS_CERTIFICATE_PASSWORD }}
