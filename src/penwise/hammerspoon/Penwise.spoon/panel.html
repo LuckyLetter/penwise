@@ -18,6 +18,7 @@
     --ins-bg: #e6f4ea;
     --warn-bg: #fff6e0;
     --warn-text: #7a5300;
+    --bar: #a1a1a6; /* the kinds of fixes you didn't pick: grey beside the accent */
   }
   @media (prefers-color-scheme: dark) {
     :root {
@@ -33,6 +34,7 @@
       --ins-bg: #1c3624;
       --warn-bg: #3a2f14;
       --warn-text: #f5d68a;
+      --bar: #636366;
     }
   }
   * { box-sizing: border-box; }
@@ -103,10 +105,43 @@
   .tips { margin: 0 0 12px; padding: 8px 12px; border-radius: 8px; background: var(--surface); font-size: 13px; color: var(--muted); }
   .banner { margin: 0 0 12px; padding: 8px 12px; border-radius: 8px; background: var(--warn-bg); color: var(--warn-text); }
   .good { margin-top: 12px; color: var(--ins); font-weight: 500; }
-  .insight { display: grid; grid-template-columns: 1fr auto; gap: 2px 12px; padding: 8px 0; border-bottom: 1px solid var(--border); }
-  .insight .count { color: var(--muted); font-variant-numeric: tabular-nums; }
-  .insight .bar { grid-column: 1 / 3; height: 4px; border-radius: 2px; background: var(--accent); opacity: 0.55; }
-  .insight .note, .insight .example { grid-column: 1 / 3; font-size: 13px; color: var(--muted); }
+  /* "Your recurring fixes": the headline, a bar for each kind of fix, its rule, and repeated fixes. */
+  .lead { margin: 2px 0 12px; }
+  .lead .top { margin: 1px 0; font-size: 22px; font-weight: 600; line-height: 1.25; }
+  .kind {
+    display: grid;
+    grid-template-columns: minmax(0, 13.5em) 1fr 2.6em;
+    align-items: center;
+    gap: 10px;
+    width: calc(100% + 12px);
+    margin: 0 -6px;
+    padding: 4px 6px;
+    border: 0;
+    border-radius: 6px;
+    background: none;
+    color: inherit;
+    font: inherit;
+    font-size: 13px;
+    text-align: left;
+    cursor: pointer;
+  }
+  .kind:hover { background: var(--surface); }
+  .kind:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+  .kind[aria-pressed="true"] { font-weight: 600; }
+  .kind .bar { display: block; height: 8px; min-width: 4px; border-radius: 0 4px 4px 0; background: var(--bar); }
+  .kind[aria-pressed="true"] .bar { background: var(--accent); }
+  .kind .share { color: var(--muted); font-weight: 400; text-align: right; font-variant-numeric: tabular-nums; }
+  .kind.other { color: var(--muted); cursor: default; }
+  .kind.other:hover { background: none; }
+  .tip { margin-top: 10px; padding: 10px 12px; border-radius: 8px; background: var(--surface); font-size: 13px; }
+  .tip .title { font-weight: 600; }
+  .tip .example { margin-top: 6px; color: var(--muted); }
+  .tip del, .chip del { color: var(--del); background: var(--del-bg); text-decoration-thickness: 1px; }
+  .tip ins, .chip ins { color: var(--ins); background: var(--ins-bg); text-decoration: none; }
+  .tip del + ins, .chip del + ins { margin-left: 2px; }
+  .chips { display: flex; flex-wrap: wrap; gap: 6px; }
+  .chip { padding: 2px 9px; border: 1px solid var(--border); border-radius: 999px; font-size: 13px; }
+  .chip .count { margin-left: 6px; color: var(--muted); font-size: 12px; }
   .note-text { margin: 0; white-space: pre-wrap; font: 13px/1.55 ui-monospace, "SF Mono", Menlo, monospace; -webkit-user-select: text; user-select: text; }
   .error { color: var(--del); }
 
@@ -260,6 +295,7 @@ const state = {
   error: "",
   note: { title: "", text: "" },
   insights: null,
+  insightsPick: 0, // the kind of fix whose rule shows in "Your recurring fixes"
   explain: false,
   language: "en",
   style: "academic",
@@ -434,39 +470,60 @@ function renderChanges() {
   return list;
 }
 
-// "Your recurring fixes": what you fix most, the rule for each, and fixes you keep repeating.
+// "Your recurring fixes" at a glance: your most common mistake; a bar for each kind of fix (the five
+// you make most, then the rest); the rule and a fix from your own writing for the kind you pick
+// (the most common at first); and the fixes you keep making.
 function renderInsights(data) {
   const parts = [el("h2", {}, tr("Your recurring fixes"))];
   if (!data.total) {
     parts.push(el("div", { class: "muted" }, tr("No history yet. Accept some changes, and your patterns will show up here.")));
     return parts;
   }
-  parts.push(el("div", { class: "muted" }, tr("{count} changes you accepted since {date}", { count: data.total, date: data.since })));
-  const most = Math.max(...data.categories.map((c) => c.count));
-  for (const category of data.categories) {
-    parts.push(
-      el("div", { class: "insight" },
-        el("strong", {}, category.label),
-        el("span", { class: "count" }, `${category.count}×`),
-        el("div", { class: "bar", style: `width: ${Math.max(4, (100 * category.count) / most)}%` }),
-        category.note && el("span", { class: "note" }, category.note),
-        category.example && el("span", { class: "example" }, tr("e.g. …{example}…", { example: category.example })),
-      ),
-    );
+  const kinds = data.categories.slice(0, 5);
+  const rest = data.total - kinds.reduce((sum, kind) => sum + kind.count, 0);
+  const share = (count) => `${Math.round((100 * count) / data.total)}%`;
+  const most = Math.max(rest, ...kinds.map((kind) => kind.count));
+  const bar = (count) => el("span", { class: "bar", style: `width: ${(100 * count) / most}%` });
+  const picked = kinds[state.insightsPick] || kinds[0];
+
+  parts.push(el("div", { class: "lead" },
+    el("div", { class: "muted" }, tr("Your most common mistake")),
+    el("div", { class: "top" }, kinds[0].label),
+    el("div", { class: "muted" }, tr("{percent} of {count} fixes since {date}",
+      { percent: share(kinds[0].count), count: data.total, date: localDate(data.since) }))));
+  parts.push(...kinds.map((kind, index) =>
+    el("button", {
+      type: "button",
+      class: "kind",
+      "aria-pressed": String(kind === picked),
+      onclick: () => { state.insightsPick = index; render(); },
+    }, el("span", {}, kind.label), bar(kind.count), el("span", { class: "share" }, share(kind.count)))));
+  if (rest > 0) {
+    parts.push(el("div", { class: "kind other" }, el("span", {}, tr("Other")), bar(rest), el("span", { class: "share" }, share(rest))));
   }
+  const example = picked.example;
+  parts.push(el("div", { class: "tip" },
+    el("div", { class: "title" }, picked.label),
+    picked.note && el("div", {}, picked.note),
+    example && el("div", { class: "example" }, "…" + example.before_text,
+      example.before && el("del", {}, example.before), example.after && el("ins", {}, example.after),
+      example.after_text + "…")));
+
   if (data.repeated.length) {
     parts.push(el("h2", {}, tr("Fixes you've made more than once")));
-    for (const item of data.repeated) {
-      parts.push(
-        el("div", { class: "insight" },
-          el("strong", {}, item.pair),
-          el("span", { class: "count" }, `${item.count}×`),
-          item.example && el("span", { class: "example" }, tr("e.g. …{example}…", { example: item.example })),
-        ),
-      );
-    }
+    parts.push(el("div", { class: "chips" }, ...data.repeated.slice(0, 6).map((fix) =>
+      el("span", { class: "chip" },
+        fix.before && el("del", {}, fix.before), fix.after && el("ins", {}, fix.after),
+        el("span", { class: "count" }, `${fix.count}×`)))));
   }
   return parts;
+}
+
+// "2026-10-12" as people write dates in Penwise's language: Oct 12, 2026 · 2026年10月12日.
+function localDate(day) {
+  const date = new Date(`${day}T00:00:00`);
+  if (Number.isNaN(date.getTime())) return day;
+  return date.toLocaleDateString(document.documentElement.lang || "en", { year: "numeric", month: "short", day: "numeric" });
 }
 
 // The settings window: the service's address, its API key if it needs one, and the model. One
@@ -978,7 +1035,7 @@ window.penwise = {
         break;
       case "insights":
         stopTimers();
-        Object.assign(state, { status: "insights", original: "", insights: event });
+        Object.assign(state, { status: "insights", original: "", insights: event, insightsPick: 0 });
         break;
       case "note":
         stopTimers();
@@ -1102,6 +1159,11 @@ document.addEventListener("keydown", (event) => {
   } else if (event.metaKey && event.key === "c" && !selection) {
     event.preventDefault();
     copy();
+  } else if (state.status === "insights" && (event.key === "ArrowDown" || event.key === "ArrowUp")) {
+    event.preventDefault(); // the next or previous kind of fix, and its rule
+    const kinds = Math.min(5, state.insights.categories.length);
+    if (kinds) state.insightsPick = (state.insightsPick + (event.key === "ArrowDown" ? 1 : kinds - 1)) % kinds;
+    render();
   } else if (/^[1-9]$/.test(event.key) && !event.metaKey && state.status === "ready") {
     const change = state.changes[Number(event.key) - 1];
     if (change) toggle(change.id);

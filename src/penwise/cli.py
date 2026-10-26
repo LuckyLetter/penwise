@@ -304,10 +304,13 @@ def cmd_insights(args: argparse.Namespace) -> int:
                     "total": data["total"],
                     "since": (data["first"] or "")[:10],
                     "categories": [
-                        {"label": tr(title), "count": n, "note": tr(note), "example": example}
-                        for title, note, n, example in data["lessons"]
+                        {"label": tr(title), "count": n, "note": tr(note), "example": history.example(entry)}
+                        for title, note, n, entry in data["lessons"]
                     ],
-                    "repeated": [{"pair": pair, "count": n, "example": ex} for pair, n, ex in data["repeated"]],
+                    "repeated": [
+                        {"before": entry.get("before", ""), "after": entry.get("after", ""), "count": n}
+                        for _, n, entry in data["repeated"]
+                    ],
                 },
                 ensure_ascii=False,
             )
@@ -316,16 +319,17 @@ def cmd_insights(args: argparse.Namespace) -> int:
     if not data["total"]:
         print("No history yet. Accept some changes in the panel, and your patterns will show up here.")
         return 0
-    print(f"{data['total']} accepted changes since {data['first'][:10]}\n")
+    print(f"{data['total']} fixes since {data['first'][:10]}\n")
     print("What you fix most:")
-    for title, _, n, example in data["lessons"]:
+    for title, _, n, entry in data["lessons"]:
+        example = entry.get("context", "")
         print(f"  {n:>4}  {title}" + (f"   e.g. …{example}…" if example else ""))
     if data["repeated"]:
         print("\nFixes you've made more than once:")
-        for pair, n, example in data["repeated"]:
+        for pair, n, entry in data["repeated"]:
             print(f"  {n:>4}× {pair}")
-            if example:
-                print(f"         e.g. …{example}…")
+            if entry.get("context"):
+                print(f"         e.g. …{entry['context']}…")
     return 0
 
 

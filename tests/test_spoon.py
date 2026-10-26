@@ -335,7 +335,7 @@ def test_the_menu_shows_your_recurring_fixes(config):
     spoon.run_tasks()
     insights = spoon.events[-1]
     assert insights["type"] == "insights" and insights["total"] == 2
-    assert insights["repeated"][0]["pair"] == "in → on"
+    assert insights["repeated"][0] == {"before": "in", "after": "on", "count": 2}
 
 
 def test_the_menu_opens_the_settings(config):

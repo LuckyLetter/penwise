@@ -86,33 +86,55 @@ def mark_seen(changes: list[Change], path: Path | None = None) -> None:
         change.seen = counts.get(pair_key(change.before, change.after), 0)
 
 
-def lesson(entry: dict) -> tuple[str, str]:
-    """The (title, note) of a fix you accepted, worked out again from the fix and the words around it."""
-    before, after = entry.get("before", ""), entry.get("after", "")
-    around_before, found, around_after = entry.get("context", "").partition(f"[{before}]")
-    if not found:
-        around_before = around_after = ""
-    category, note = lessons.classify(before, after, around_before, around_after)
-    return lessons.label(category, note), note
+# Not mistakes, so not in your patterns: rewordings (Improve) and phrases Penwise wrote for you.
+NOT_MISTAKES = {"rephrased", "filled"}
+
+
+def around(entry: dict) -> tuple[str, str] | None:
+    """The words just before and after the fix, as recorded; None when they can't be told apart."""
+    before, found, after = entry.get("context", "").partition(f"[{entry.get('before', '')}]")
+    return (before, after) if found else None
+
+
+def lesson(entry: dict) -> tuple[str, str, str]:
+    """The (kind, title, note) of a fix you accepted, worked out again from the fix and the words around it."""
+    words_around = around(entry) or ("", "")
+    category, note = lessons.classify(entry.get("before", ""), entry.get("after", ""), *words_around)
+    return category, lessons.label(category, note), note
+
+
+def example(entry: dict) -> dict | None:
+    """A fix in the words around it, for the panel to show as you'd see it in your text."""
+    words_around = around(entry)
+    if words_around is None:
+        return None
+    return {
+        "before_text": words_around[0],
+        "before": entry.get("before", ""),
+        "after": entry.get("after", ""),
+        "after_text": words_around[1],
+    }
 
 
 def insights(path: Path | None = None, limit: int = 8) -> dict:
-    entries = load(path)
-    taught = [lesson(e) for e in entries]
-    by_lesson = Counter(taught)
-    # An example of each, from your own writing (the newest).
-    lesson_examples = {point: e.get("context", "") for point, e in zip(taught, entries, strict=True)}
-    pairs = Counter(pair_key(e.get("before", ""), e.get("after", "")) for e in entries)
-    examples: dict[str, str] = {}
-    for e in reversed(entries):  # newest example wins
-        examples.setdefault(pair_key(e.get("before", ""), e.get("after", "")), e.get("context", ""))
+    """What you fix most (its rule, how often, your newest fix of the kind) and the fixes you keep
+    making. Only mistakes count: not rewordings, nor phrases Penwise filled in for you."""
+    mistakes = []
+    for entry in load(path):
+        kind, title, note = lesson(entry)
+        if kind not in NOT_MISTAKES:
+            mistakes.append((entry, (title, note), pair_key(entry.get("before", ""), entry.get("after", ""))))
+    by_lesson = Counter(point for _, point, _ in mistakes)
+    pairs = Counter(pair for _, _, pair in mistakes)
+    newest_of_lesson = {point: entry for entry, point, _ in mistakes}  # later lines win
+    newest_of_pair = {pair: entry for entry, _, pair in mistakes}
     return {
-        "total": len(entries),
-        "first": entries[0].get("time") if entries else None,
+        "total": len(mistakes),
+        "first": mistakes[0][0].get("time") if mistakes else None,
         "lessons": [
-            (title, note, n, lesson_examples[title, note]) for (title, note), n in by_lesson.most_common(limit)
+            (title, note, n, newest_of_lesson[title, note]) for (title, note), n in by_lesson.most_common(limit)
         ],
-        "repeated": [(k, n, examples.get(k, "")) for k, n in pairs.most_common(limit) if n > 1],
+        "repeated": [(pair, n, newest_of_pair[pair]) for pair, n in pairs.most_common(limit) if n > 1],
     }
 
 

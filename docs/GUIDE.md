@@ -201,12 +201,14 @@ with every setting explained. All settings:
 
 ## Learning from your changes
 
-*Your recurring fixes* in Penwise's menu shows the rules you need most, each with an example from your own writing.
+*Your recurring fixes* in Penwise's menu shows your most common mistake at the top, then a bar for each kind of fix
+you make, and the rule for the one you pick (click a bar, or press ↑ ↓) with a fix from your own writing. Below are
+the fixes you keep making. Only mistakes count: rewordings from Improve, and words Penwise filled in for you, don't.
 In the Terminal:
 
 ```console
 $ penwise insights
-42 accepted changes since 2026-10-12
+42 fixes since 2026-10-12
 
 What you fix most:
     14  Articles

@@ -273,7 +273,9 @@ def test_insights_as_json(isolated, monkeypatch, capsys):
     assert data["total"] == 2
     assert data["categories"][0]["label"] == "Prepositions"
     assert "learn them in phrases" in data["categories"][0]["note"]
-    assert data["repeated"][0]["pair"] == "in → on"
+    example = {"before_text": "results ", "before": "in", "after": "on", "after_text": ""}
+    assert data["categories"][0]["example"] == example
+    assert data["repeated"] == [{"before": "in", "after": "on", "count": 2}]
 
 
 def test_improve_takes_its_tone_from_the_app(server, isolated, monkeypatch, capsys):

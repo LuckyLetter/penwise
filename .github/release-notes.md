@@ -1,5 +1,8 @@
 **Better English in any text box on your Mac:** press **⌃⌥P**, check the changes, press **Return**.
 
+**New in 1.0.1:** *Your recurring fixes* shows at a glance which mistake you make most, with a bar for each kind of
+fix and the rule to remember. Already have Penwise? Choose *Update Penwise* in its menu.
+
 ![Penwise in a text box: ⌃⌥P shows the fixes, Tab switches to Improve, and Return puts the text in place.](https://github.com/LuckyLetter/penwise/raw/main/docs/demo.gif)
 
 ## Install
@@ -27,7 +30,7 @@
 - **Fix or Improve:** ⌃⌥P fixes the errors; Tab (or ⌃⌥⇧P) also improves clarity and flow, in the right tone for an
   email, a chat or research writing. ⌃⌥⌘P fixes right away, without the panel.
 - **Teaches as it fixes:** every change comes with a short note on the rule, and *Your recurring fixes* shows the
-  ones you need most.
+  mistake you make most, with a bar for each kind and the rule to remember.
 - **Fills in what you can't say yet:** write a word in your own language, or `[[?]]`, and Penwise finds the English.
 - **Safe:** it never changes numbers, citations, code or links on its own, and you can undo any single change.
 - **In your language:** the window, menu and notes come in English, 中文, 日本語 or 한국어 (top of Settings).

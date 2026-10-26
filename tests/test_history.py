@@ -29,8 +29,24 @@ def test_insights(tmp_path):
     history.record([accepted("in", "on", "preposition")] * 3 + [accepted("a", "an", "article")], path)
     data = history.insights(path)
     assert data["total"] == 4
-    assert data["lessons"][0] == ("Prepositions", NOTES["preposition"], 3, "the [in] of")
-    assert data["repeated"] == [("in → on", 3, "the [in] of")]
+    title, note, count, newest = data["lessons"][0]
+    assert (title, note, count, newest["context"]) == ("Prepositions", NOTES["preposition"], 3, "the [in] of")
+    [(pair, count, newest)] = data["repeated"]
+    assert (pair, count, newest["after"]) == ("in → on", 3, "on")
+
+
+def test_only_mistakes_count_each_with_an_example_as_you_wrote_it(tmp_path):
+    path = tmp_path / "history.jsonl"
+    reworded = {"before": "very important", "after": "crucial", "context_before": "It is ", "context_after": "."}
+    filled = {"before": "[[?]]", "after": "pipeline", "context_before": "our ", "context_after": " runs"}
+    article = {"before": "a", "after": "an", "context_before": "is ", "context_after": " LLM"}
+    history.record([reworded, filled, article], path)
+    data = history.insights(path)
+    assert data["total"] == 1  # an Improve rewording and a phrase Penwise wrote aren't mistakes
+    assert [title for title, *_ in data["lessons"]] == ["a or an"]
+    shown = {"before_text": "is ", "before": "a", "after": "an", "after_text": " LLM"}
+    assert history.example(data["lessons"][0][3]) == shown
+    assert history.example({"before": "x", "after": "y", "context": "cut off [x"}) is None
 
 
 def test_clear(tmp_path):
@@ -46,7 +62,7 @@ def test_insights_name_the_grammar_point_from_the_words_around_the_fix(tmp_path)
     agreement = {"before": "are", "after": "is", "context_before": "Each of the models ", "context_after": " tested."}
     plural = {"before": "dataset", "after": "datasets", "context_before": "two ", "context_after": " and"}
     history.record([agreement, agreement, plural], path)
-    assert history.insights(path)["lessons"] == [
+    assert [(title, note, n, newest["context"]) for title, note, n, newest in history.insights(path)["lessons"]] == [
         ("Subject–verb agreement", AGREEMENT_NOTE, 2, "Each of the models [are] tested."),
         ("Word form", NOTES["word-form"], 1, "two [dataset] and"),
     ]

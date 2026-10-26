@@ -186,28 +186,62 @@ def test_grammar_fixes_offer_no_keep_link(page):
     assert page.locator("li .keep button").count() == 0  # no "Always keep" for a grammar fix
 
 
-def test_insights_view(page):
-    send(
-        page,
+INSIGHTS = {
+    "type": "insights",
+    "total": 10,
+    "since": "2026-10-12",
+    "categories": [
         {
-            "type": "insights",
-            "total": 7,
-            "since": "2026-10-12",
-            "categories": [
-                {"label": "a or an", "count": 5, "note": "Use “an” before a vowel sound.", "example": "is [a] LLM"},
-                {"label": "Prepositions", "count": 2, "note": "Learn them in phrases."},
-            ],
-            "repeated": [{"pair": "in → on", "count": 2, "example": "results [in] the other hand"}],
+            "label": "a or an",
+            "count": 5,
+            "note": "Use “an” before a vowel sound.",
+            "example": {"before_text": "is ", "before": "a", "after": "an", "after_text": " LLM"},
         },
-    )
-    text = page.locator("main").inner_text()
-    assert "7 changes you accepted since 2026-10-12" in text
-    assert "Use “an” before a vowel sound." in text
-    assert "e.g. …is [a] LLM…" in text  # from your own writing
-    assert "e.g. …results [in] the other hand…" in text
-    assert page.locator(".bar").count() == 2
+        {"label": "Prepositions", "count": 2, "note": "Learn them in phrases.", "example": None},
+        {"label": "Spelling", "count": 1, "note": "A typo.", "example": None},
+    ],
+    "repeated": [{"before": "in", "after": "on", "count": 2}],
+}
+
+
+def test_insights_view(page):
+    send(page, INSIGHTS)
+    assert page.locator(".lead").inner_text().splitlines() == [
+        "Your most common mistake",
+        "a or an",
+        "50% of 10 fixes since Oct 12, 2026",
+    ]
+    assert page.locator(".kind .share").all_inner_texts() == ["50%", "20%", "10%", "20%"]  # the rest: Other
+    assert page.locator(".kind.other").inner_text().startswith("Other")
+    assert page.locator('.kind[aria-pressed="true"]').inner_text().startswith("a or an")
+    tip = page.locator(".tip")  # the rule, and a fix from your own writing as you saw it
+    assert "Use “an” before a vowel sound." in tip.inner_text()
+    assert tip.locator(".example").inner_text() == "…is aan LLM…"
+    assert (tip.locator("del").inner_text(), tip.locator("ins").inner_text()) == ("a", "an")
+    chip = page.locator(".chip")
+    assert [chip.locator(part).inner_text() for part in ("del", "ins", ".count")] == ["in", "on", "2×"]
     assert page.locator("#modes").is_hidden()
     assert page.locator("#primary").inner_text().startswith("Done")
+
+
+def test_insights_show_the_rule_of_the_kind_you_pick(page):
+    send(page, INSIGHTS)
+    page.locator(".kind", has_text="Prepositions").click()
+    assert page.locator('.kind[aria-pressed="true"]').inner_text().startswith("Prepositions")
+    assert page.locator(".tip").inner_text().splitlines() == ["Prepositions", "Learn them in phrases."]
+    titles = []
+    for key in ("ArrowDown", "ArrowDown", "ArrowUp"):  # the next, round to the first, back
+        page.keyboard.press(key)
+        titles.append(page.locator(".tip .title").inner_text())
+    assert titles == ["Spelling", "a or an", "Spelling"]
+    send(page, INSIGHTS)  # opened again: the most common first
+    assert page.locator(".tip .title").inner_text() == "a or an"
+
+
+def test_insights_dates_are_written_as_in_the_language(page):
+    speak(page, "zh")
+    send(page, INSIGHTS)
+    assert "2026年10月12日" in page.locator(".lead").inner_text()
 
 
 def test_insights_without_history(page):
